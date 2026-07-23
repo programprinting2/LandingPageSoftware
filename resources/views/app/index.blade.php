@@ -1,0 +1,6 @@
+@include('landing.index')
+@include('client.index')
+@include('affiliate.index')
+@include('admin.index')
+@include('shared.components.auth-modal')
+@include('shared.components.app-dialog')

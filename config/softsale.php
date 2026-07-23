@@ -39,4 +39,7 @@ return [
     ],
 
     'referral_base_url' => env('APP_URL', 'http://localhost:8000'),
+
+    'default_application_slug' => env('SOFTSALE_DEFAULT_APP_SLUG', 'spot-color'),
+    'default_trial_package_name' => env('SOFTSALE_DEFAULT_TRIAL_PACKAGE', 'trial'),
 ];
