@@ -119,6 +119,9 @@ class AdminApplicationController extends Controller
                 'devices_quota' => (int) ($package['devices_quota'] ?? 1),
                 'duration_days' => (int) ($package['duration_days'] ?? 0),
                 'price' => (float) ($package['price'] ?? 0),
+                'discount_percent' => (float) ($package['discount_percent'] ?? 0),
+                'affiliate_commission_fixed' => (float) ($package['affiliate_commission_fixed'] ?? 0),
+                'affiliate_commission_percent' => (float) ($package['affiliate_commission_percent'] ?? 0),
                 'sort_order' => (int) ($package['sort_order'] ?? $index),
             ]);
         }
@@ -171,6 +174,9 @@ class AdminApplicationController extends Controller
                     'devices_quota' => $package->devices_quota,
                     'duration_days' => $package->duration_days,
                     'price' => (float) $package->price,
+                    'discount_percent' => (float) $package->discount_percent,
+                    'affiliate_commission_fixed' => (float) $package->affiliate_commission_fixed,
+                    'affiliate_commission_percent' => (float) $package->affiliate_commission_percent,
                     'sort_order' => $package->sort_order,
                 ])
                 ->values()

@@ -1,10 +1,10 @@
-﻿<!-- â•â•â•â•â•â•â•â•â•â•â• FOOTER â•â•â•â•â•â•â•â•â•â•â• -->
+﻿<!-- FOOTER -->
 <footer class="footer">
   <div class="container">
     <div class="footer-grid">
       <div>
-        <div class="footer-brand gradient-text">SoftSale</div>
-        <p class="footer-desc">Platform manajemen bisnis all-in-one untuk era digital. Dibuat dengan teknologi terdepan untuk bisnis Indonesia.</p>
+        <div class="footer-brand gradient-text">{{ $cms['site']['name'] ?? 'SoftSale' }}</div>
+        <p class="footer-desc">{{ $cms['footer']['description'] ?? '' }}</p>
       </div>
       <div>
         <div class="footer-col-title">Produk</div>
@@ -28,6 +28,6 @@
         <span class="footer-link">SLA</span>
       </div>
     </div>
-    <div class="footer-bottom">Â© 2026 SoftSale. All rights reserved.</div>
+    <div class="footer-bottom">{{ $cms['footer']['copyright'] ?? '' }}</div>
   </div>
 </footer>

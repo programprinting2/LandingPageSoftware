@@ -18,7 +18,7 @@ class ClientAuthService
         return DB::transaction(function () use ($data) {
             $user = User::create([
                 'name' => $data['name'],
-                'email' => $data['email'],
+                'email' => strtolower(trim($data['email'])),
                 'password' => $data['password'],
                 'role' => 'client',
             ]);
@@ -33,19 +33,25 @@ class ClientAuthService
 
             $this->assignDefaultTrialLicense($client);
 
+            $user->sendEmailVerificationNotification();
+
             return compact('user', 'client');
         });
     }
 
     public function attemptClientLogin(string $email, string $password): ?User
     {
-        $user = User::where('email', $email)->first();
+        $user = User::where('email', strtolower(trim($email)))->first();
 
         if (! $user || ! Hash::check($password, $user->password)) {
             return null;
         }
 
         if ($user->role !== 'client') {
+            return null;
+        }
+
+        if (! $user->hasVerifiedEmail()) {
             return null;
         }
 
@@ -56,6 +62,21 @@ class ClientAuthService
         }
 
         return $user;
+    }
+
+    public function findUnverifiedClientByCredentials(string $email, string $password): ?User
+    {
+        $user = User::where('email', strtolower(trim($email)))->first();
+
+        if (! $user || ! Hash::check($password, $user->password)) {
+            return null;
+        }
+
+        if ($user->role !== 'client' || $user->hasVerifiedEmail()) {
+            return null;
+        }
+
+        return $user->load('client');
     }
 
     public function createApiToken(User $user): array

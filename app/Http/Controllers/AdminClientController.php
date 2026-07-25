@@ -20,7 +20,7 @@ class AdminClientController extends Controller
     public function index(): JsonResponse
     {
         $clients = Client::query()
-            ->with(['user:id,name,email'])
+            ->with(['user:id,name,email,email_verified_at'])
             ->latest()
             ->get()
             ->map(fn (Client $client) => $this->formatClient($client));
@@ -40,6 +40,7 @@ class AdminClientController extends Controller
                 'email' => $validated['email'],
                 'password' => $validated['password'],
                 'role' => 'client',
+                'email_verified_at' => $this->resolveEmailVerifiedAt($validated, null),
             ]);
 
             $client = Client::create([
@@ -74,6 +75,10 @@ class AdminClientController extends Controller
 
             if (! empty($validated['password'])) {
                 $userData['password'] = $validated['password'];
+            }
+
+            if (array_key_exists('email_verified', $validated)) {
+                $userData['email_verified_at'] = $this->resolveEmailVerifiedAt($validated, $client->user);
             }
 
             $client->user->update($userData);
@@ -178,7 +183,7 @@ class AdminClientController extends Controller
     private function formatClient(Client $client): array
     {
         $client->load([
-            'user:id,name,email',
+            'user:id,name,email,email_verified_at',
             'applications' => fn ($query) => $query
                 ->select('applications.id', 'applications.name', 'applications.slug')
                 ->withPivot(['application_package_id', 'devices_max', 'status', 'purchased_at', 'expires_at']),
@@ -191,6 +196,8 @@ class AdminClientController extends Controller
             'name' => $client->user?->name,
             'company_name' => $client->company_name,
             'email' => $client->user?->email,
+            'email_verified' => $client->user?->email_verified_at !== null,
+            'email_verified_at' => $client->user?->email_verified_at?->format('d M Y H:i'),
             'whatsapp' => $client->whatsapp,
             'status' => $client->status,
             'application_ids' => $client->applications->pluck('id')->values()->all(),
@@ -243,6 +250,24 @@ class AdminClientController extends Controller
             'duration_days' => (int) $package->duration_days,
             'price' => (float) $package->price,
         ];
+    }
+
+    private function resolveEmailVerifiedAt(array $validated, ?User $user): ?Carbon
+    {
+        if (! array_key_exists('email_verified', $validated)) {
+            return $user?->email_verified_at;
+        }
+
+        if ($this->isTruthy($validated['email_verified'])) {
+            return $user?->email_verified_at ?? now();
+        }
+
+        return null;
+    }
+
+    private function isTruthy(mixed $value): bool
+    {
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
     }
 
     private function parsePivotDate(mixed $value): ?Carbon

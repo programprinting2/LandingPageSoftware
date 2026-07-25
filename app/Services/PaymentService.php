@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Affiliate;
 use App\Models\Application;
 use App\Models\ApplicationPackage;
 use App\Models\PaymentOrder;
@@ -19,12 +20,21 @@ class PaymentService
         private TransactionService $transactionService,
     ) {}
 
-    public function createUpgradePayment(User $user, int $packageId, string $applicationSlug = 'spot-color'): array
+    public function createUpgradePayment(User $user, int $packageId, string $applicationSlug = 'spot-color', ?string $referralCode = null): array
     {
         $validation = $this->licenseService->validateUpgradeRequest($user, $packageId, $applicationSlug);
 
         if (($validation['status'] ?? '') === 'error') {
             return $validation;
+        }
+
+        $affiliate = $this->resolveAffiliateReferral($referralCode);
+
+        if ($referralCode !== null && $referralCode !== '' && ! $affiliate) {
+            return [
+                'status' => 'error',
+                'message' => 'Kode referral tidak valid atau affiliate tidak aktif.',
+            ];
         }
 
         /** @var Application $application */
@@ -34,7 +44,11 @@ class PaymentService
         /** @var ApplicationPackage|null $currentPackage */
         $currentPackage = $validation['current_package'];
 
-        $amount = (int) round((float) $targetPackage->price);
+        $listPrice = (float) $targetPackage->price;
+        $discountPercent = $affiliate
+            ? max(0, min(100, (float) $targetPackage->discount_percent))
+            : 0.0;
+        $amount = (int) round($listPrice * (1 - ($discountPercent / 100)));
         $minAmount = (int) config('komerce.min_amount', 10000);
 
         if ($amount < $minAmount) {
@@ -97,6 +111,8 @@ class PaymentService
             'client_id' => $user->client->id,
             'application_id' => $application->id,
             'application_package_id' => $targetPackage->id,
+            'affiliate_id' => $affiliate?->id,
+            'referral_code' => $affiliate?->code,
             'type' => 'upgrade',
             'amount' => $amount,
             'payment_type' => 'qris',
@@ -107,6 +123,9 @@ class PaymentService
             'expires_at' => $expiresAt,
             'meta' => [
                 'current_package_id' => $currentPackage?->id,
+                'list_price' => $listPrice,
+                'discount_percent' => $discountPercent,
+                'discount_amount' => round($listPrice - $amount, 2),
                 'komerce_create' => $data,
             ],
         ]);
@@ -116,8 +135,27 @@ class PaymentService
             'message' => 'QRIS upgrade berhasil dibuat. Selesaikan pembayaran dalam 5 menit.',
             'payment_required' => true,
             'sandbox_simulate' => $this->allowsSimulatePayment(),
+            'referral_code' => $affiliate?->code,
             'payment' => $this->formatPaymentOrder($order),
         ];
+    }
+
+    private function resolveAffiliateReferral(?string $code): ?Affiliate
+    {
+        $normalized = Str::upper(trim((string) $code));
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        if (! preg_match('/^A[A-Z][0-9]{4}$/', $normalized)) {
+            return null;
+        }
+
+        return Affiliate::query()
+            ->where('code', $normalized)
+            ->where('status', 'active')
+            ->first();
     }
 
     public function simulatePayment(User $user, string $orderId): array
@@ -463,8 +501,33 @@ class PaymentService
                 ->first();
 
             if ($transaction) {
+                $referralMeta = [];
+
+                if ($locked->affiliate_id) {
+                    $affiliate = Affiliate::query()->lockForUpdate()->find($locked->affiliate_id);
+
+                    if ($affiliate) {
+                        $commissionAmount = $targetPackage->calculateAffiliateCommission((float) $locked->amount);
+
+                        $affiliate->increment('sales_count');
+
+                        if ($commissionAmount > 0) {
+                            $affiliate->increment('pending_commission', $commissionAmount);
+                        }
+
+                        $referralMeta = [
+                            'referral_code' => $locked->referral_code,
+                            'affiliate_id' => $affiliate->id,
+                            'affiliate_code' => $affiliate->code,
+                            'commission_amount' => $commissionAmount,
+                            'commission_percent' => (float) $targetPackage->affiliate_commission_percent,
+                            'commission_fixed' => (float) $targetPackage->affiliate_commission_fixed,
+                        ];
+                    }
+                }
+
                 $transaction->update([
-                    'meta' => array_merge($transaction->meta ?? [], [
+                    'meta' => array_merge($transaction->meta ?? [], $referralMeta, [
                         'payment_order_id' => $locked->order_id,
                         'gateway' => $this->snapshotGatewayMeta($locked, $source),
                     ]),
@@ -509,6 +572,7 @@ class PaymentService
                 'name' => $order->application->name,
             ] : null,
             'simulate_available' => $this->allowsSimulatePayment() && $order->status === 'pending',
+            'referral_code' => $order->referral_code,
         ];
     }
 
@@ -540,6 +604,9 @@ class PaymentService
             default => 'unknown',
         };
 
+        $order->loadMissing(['affiliate.user:id,name']);
+        $affiliateName = $order->affiliate?->user?->name ?? ($order->referral_code ? $order->affiliate?->code : null);
+
         return [
             'provider' => 'Komerce',
             'environment' => str_contains(strtolower((string) config('komerce.base_url')), 'sandbox') ? 'sandbox' : 'production',
@@ -558,6 +625,8 @@ class PaymentService
             'paid_at' => $order->paid_at?->toIso8601String(),
             'fulfillment_source' => $fulfillmentSource,
             'simulated' => $simulated,
+            'referral_code' => $order->referral_code,
+            'affiliate_name' => $affiliateName,
             'gateway_mismatch' => data_get($order->meta, 'gateway_mismatch'),
             'create_response' => $create,
             'fulfill_response' => $fulfill ?: data_get($order->meta, 'komerce_status_sync'),

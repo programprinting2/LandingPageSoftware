@@ -1,4 +1,4 @@
-<div id="dashAffiliate" class="app-dashboard">
+<div id="dashAffiliate" class="app-dashboard active">
     @include('affiliate.components.sidebar')
 
     <div class="dash-main">

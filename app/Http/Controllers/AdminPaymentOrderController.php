@@ -23,6 +23,8 @@ class AdminPaymentOrderController extends Controller
                 'client.user:id,name,email',
                 'application:id,name',
                 'transaction:id,reference',
+                'affiliate:id,user_id,code',
+                'affiliate.user:id,name',
             ])
             ->latest('created_at')
             ->latest('id');
@@ -92,6 +94,10 @@ class AdminPaymentOrderController extends Controller
 
         $customerName = $order->client?->company_name ?: $order->client?->user?->name ?: '—';
         $gateway = $this->paymentService->snapshotGatewayMeta($order);
+        $affiliateName = $order->affiliate?->user?->name ?? ($order->referral_code ? $order->affiliate?->code : null);
+        $referralLabel = $order->referral_code
+            ? ($affiliateName ? "{$order->referral_code} · {$affiliateName}" : $order->referral_code)
+            : '—';
         $remoteStatus = strtoupper((string) data_get($order->meta, 'komerce_status_sync.status', ''));
         $hasMismatch = is_array(data_get($order->meta, 'gateway_mismatch'));
 
@@ -116,6 +122,9 @@ class AdminPaymentOrderController extends Controller
             'expires_at' => $expiresAt?->format('d M Y, h:i A'),
             'paid_at' => $order->paid_at?->format('d M Y, h:i A'),
             'transaction_reference' => $order->transaction?->reference,
+            'referral_code' => $order->referral_code,
+            'affiliate_name' => $affiliateName,
+            'referral_label' => $referralLabel,
             'payment_page_url' => $order->payment_page_url,
             'has_gateway_details' => true,
             'gateway' => $this->presentGateway($gateway),
@@ -147,6 +156,8 @@ class AdminPaymentOrderController extends Controller
             ['label' => 'Dibayar', 'value' => $this->formatIsoLabel($raw['paid_at'] ?? null)],
             ['label' => 'Sumber Konfirmasi', 'value' => $fulfillmentLabel],
             ['label' => 'Simulasi', 'value' => ! empty($raw['simulated']) ? 'Ya' : 'Tidak'],
+            ['label' => 'Kode Referral', 'value' => $raw['referral_code'] ?? '—'],
+            ['label' => 'Affiliate', 'value' => $raw['affiliate_name'] ?? '—'],
         ];
 
         return [

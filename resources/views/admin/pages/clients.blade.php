@@ -32,7 +32,12 @@
               <tr data-client-id="{{ $client->id }}">
                 <td class="td-bold">{{ $client->company_name }}</td>
                 <td>{{ $client->user?->name ?? '—' }}</td>
-                <td>{{ $client->user?->email ?? '—' }}</td>
+                <td>
+                  {{ $client->user?->email ?? '—' }}
+                  @if ($client->user?->email_verified_at)
+                    <span class="badge badge-active" style="font-size:10px;padding:2px 6px;margin-left:4px;">Verified</span>
+                  @endif
+                </td>
                 <td>{{ $client->applications->pluck('name')->join(', ') ?: '—' }}</td>
                 <td>{{ $client->whatsapp }}</td>
                 <td><span class="badge {{ $statusBadge }}">{{ $statusLabel }}</span></td>
@@ -103,7 +108,13 @@
                   <div class="admin-app-form-grid">
                     <div class="form-group">
                       <label class="admin-app-label" for="adminClientEmail">Email</label>
-                      <input class="admin-app-input" id="adminClientEmail" type="email" required placeholder="email@example.com">
+                      <div class="admin-client-email-row">
+                        <input class="admin-app-input" id="adminClientEmail" type="email" required placeholder="email@example.com">
+                        <label class="admin-client-email-verify" for="adminClientEmailVerified" title="Tandai email sudah diverifikasi">
+                          <input type="checkbox" id="adminClientEmailVerified">
+                          <span>Terverifikasi</span>
+                        </label>
+                      </div>
                     </div>
                     <div class="form-group">
                       <label class="admin-app-label" for="adminClientWhatsapp">No. WhatsApp</label>

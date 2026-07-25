@@ -199,9 +199,9 @@ class LicenseService
         ], $this->licenseInfoPayload($user, $application), $this->serverTimePayload());
     }
 
-    public function upgradePackage(User $user, int $packageId, string $applicationSlug = 'spot-color'): array
+    public function upgradePackage(User $user, int $packageId, string $applicationSlug = 'spot-color', ?string $referralCode = null): array
     {
-        return app(PaymentService::class)->createUpgradePayment($user, $packageId, $applicationSlug);
+        return app(PaymentService::class)->createUpgradePayment($user, $packageId, $applicationSlug, $referralCode);
     }
 
     public function validateUpgradeRequest(User $user, int $packageId, string $applicationSlug = 'spot-color'): array
@@ -513,6 +513,7 @@ class LicenseService
             'devices_quota' => (int) $package->devices_quota,
             'duration_days' => (int) $package->duration_days,
             'price' => (float) $package->price,
+            'discount_percent' => (float) $package->discount_percent,
             'sort_order' => (int) $package->sort_order,
         ];
     }

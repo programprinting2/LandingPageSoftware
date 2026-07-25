@@ -21,6 +21,7 @@ class StoreAdminClientRequest extends FormRequest
             'whatsapp' => ['required', 'string', 'max:20', 'regex:/^08[0-9]{8,13}$/'],
             'password' => ['required', 'string', Password::min(8)],
             'status' => ['required', 'in:active,trial,expired,pending'],
+            'email_verified' => ['nullable', 'boolean'],
             'applications' => ['nullable', 'array'],
             'applications.*.application_id' => ['required', 'integer', 'exists:applications,id'],
             'applications.*.package_id' => ['required', 'integer', 'exists:application_packages,id'],

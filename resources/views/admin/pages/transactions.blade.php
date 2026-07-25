@@ -59,13 +59,14 @@
                 <th>Deskripsi</th>
                 <th>Jumlah</th>
                 <th>Metode</th>
+                <th>Referral</th>
                 <th>Tanggal</th>
                 <th>Status</th>
                 <th>Gateway</th>
               </tr>
             </thead>
             <tbody id="adminTransactionsTableBody">
-              <tr><td colspan="9" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>
+              <tr><td colspan="10" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>
             </tbody>
           </table>
         </div>
@@ -131,12 +132,13 @@
                 <th>Customer Name</th>
                 <th>Total Amount</th>
                 <th>Status</th>
+                <th>Referral</th>
                 <th>Due Date</th>
                 <th>Detail</th>
               </tr>
             </thead>
             <tbody id="adminPaymentOrdersTableBody">
-              <tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>
+              <tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>
             </tbody>
           </table>
         </div>

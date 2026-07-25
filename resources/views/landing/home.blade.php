@@ -1,5 +1,16 @@
 @extends('layouts.softsale')
 
 @section('content')
-    @include('app.index')
+    @include('landing.index')
+    @include('shared.components.auth-modal')
+    @include('shared.components.app-dialog')
+    @if(!empty($liveEdit))
+        @include('landing.components.live-edit')
+    @endif
 @endsection
+
+@if(!empty($liveEdit))
+    @push('scripts')
+        <script src="{{ asset('js/live-edit.js') }}" defer></script>
+    @endpush
+@endif

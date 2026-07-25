@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\ApiAuthController;
 use App\Http\Controllers\Api\ApiLicenseController;
 use App\Http\Controllers\Api\ApiPaymentController;
+use App\Http\Controllers\Api\ApiReferralController;
 use App\Http\Controllers\Api\KomerceWebhookController;
 use App\Http\Middleware\AuthenticateApiToken;
 use App\Http\Middleware\HandleSpotColorCors;
@@ -14,6 +15,7 @@ Route::middleware([HandleSpotColorCors::class])->group(function () {
 
     Route::post('/auth/register', [ApiAuthController::class, 'register']);
     Route::post('/auth/login', [ApiAuthController::class, 'login']);
+    Route::get('/referral/{code}', [ApiReferralController::class, 'show'])->name('referral.show');
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {
         Route::post('/auth/logout', [ApiAuthController::class, 'logout']);

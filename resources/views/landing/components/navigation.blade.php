@@ -1,6 +1,6 @@
 ﻿<!-- â•â•â•â•â•â•â•â•â•â•â• NAV â•â•â•â•â•â•â•â•â•â•â• -->
 <nav class="nav" id="navbar">
-  <div class="nav-logo gradient-text" onclick="scrollToSection('hero')">SoftSale</div>
+  <div class="nav-logo gradient-text" onclick="scrollToSection('hero')">{{ $cms['site']['name'] ?? 'SoftSale' }}</div>
   <div class="nav-links" id="navLinks">
     <button class="nav-link" onclick="scrollToSection('fitur')">Fitur</button>
     <button class="nav-link" onclick="scrollToSection('harga')">Harga</button>

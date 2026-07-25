@@ -101,20 +101,33 @@
                 <div class="admin-app-panel-head admin-app-panel-head-row">
                   <div>
                     <h4>Detail Paket</h4>
-                    <p>Trial, Basic, Pro, Platinum — isi bebas</p>
+                    <p>Trial, Basic, Pro, Platinum — isi bebas. Komisi Rp dan % saling hitung otomatis dari harga paket.</p>
                   </div>
                   <button type="button" class="admin-app-btn-outline" onclick="addAdminApplicationPackageRow()">+ Tambah Paket</button>
                 </div>
                 <div class="admin-app-panel-body">
                   <div class="admin-app-packages-table-wrap">
                     <table class="admin-app-packages-table">
+                      <colgroup>
+                        <col class="col-pkg-name">
+                        <col class="col-pkg-quota">
+                        <col class="col-pkg-days">
+                        <col class="col-pkg-price">
+                        <col class="col-pkg-discount">
+                        <col class="col-pkg-commission-fixed">
+                        <col class="col-pkg-commission-percent">
+                        <col class="col-pkg-actions">
+                      </colgroup>
                       <thead>
                         <tr>
                           <th>Nama Paket</th>
                           <th>Limit</th>
                           <th>Hari</th>
-                          <th>Harga</th>
-                          <th></th>
+                          <th class="col-pkg-price-head">Harga</th>
+                          <th class="col-pkg-discount-head">Discount %</th>
+                          <th class="col-pkg-commission-fixed-head">Komisi Rp</th>
+                          <th class="col-pkg-commission-percent-head">Komisi %</th>
+                          <th class="col-pkg-actions-head"></th>
                         </tr>
                       </thead>
                       <tbody id="adminApplicationPackagesBody"></tbody>

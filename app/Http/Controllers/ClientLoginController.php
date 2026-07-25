@@ -15,13 +15,21 @@ class ClientLoginController extends Controller
     public function store(StoreClientLoginRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $email = strtolower(trim($validated['email']));
 
-        $user = $this->authService->attemptClientLogin(
-            $validated['email'],
-            $validated['password']
-        );
+        $user = $this->authService->attemptClientLogin($email, $validated['password']);
 
         if (! $user) {
+            $unverified = $this->authService->findUnverifiedClientByCredentials($email, $validated['password']);
+
+            if ($unverified) {
+                return response()->json([
+                    'message' => 'Email belum diverifikasi. Periksa inbox atau kirim ulang link konfirmasi.',
+                    'requires_verification' => true,
+                    'email' => $unverified->email,
+                ], 403);
+            }
+
             return response()->json([
                 'message' => 'Email atau password salah.',
             ], 422);

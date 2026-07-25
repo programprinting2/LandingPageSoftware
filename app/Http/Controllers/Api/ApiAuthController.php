@@ -27,20 +27,32 @@ class ApiAuthController extends Controller
             'whatsapp' => trim($validated['whatsapp'] ?? '') ?: '',
         ]);
 
-        return response()->json(
-            $this->authService->apiSessionPayload($result['user'], 'Registrasi berhasil')
-        );
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Registrasi berhasil. Periksa email Anda untuk link konfirmasi sebelum login.',
+            'requires_verification' => true,
+            'email' => $result['user']->email,
+        ], 201);
     }
 
     public function login(StoreApiLoginRequest $request): JsonResponse
     {
         $validated = $request->validated();
-        $user = $this->authService->attemptClientLogin(
-            strtolower(trim($validated['email'])),
-            $validated['password']
-        );
+        $email = strtolower(trim($validated['email']));
+        $user = $this->authService->attemptClientLogin($email, $validated['password']);
 
         if (! $user) {
+            $unverified = $this->authService->findUnverifiedClientByCredentials($email, $validated['password']);
+
+            if ($unverified) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Email belum diverifikasi. Periksa inbox atau kirim ulang link konfirmasi.',
+                    'requires_verification' => true,
+                    'email' => $unverified->email,
+                ], 403);
+            }
+
             return response()->json([
                 'status' => 'error',
                 'message' => 'Email atau password salah.',

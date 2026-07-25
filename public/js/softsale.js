@@ -4,8 +4,14 @@
   testimonials: TESTIMONIALS = [],
   aboutValues: ABOUT_VALUES = [],
   contacts: CONTACTS = [],
+  appMode = 'landing',
+  landingUrl = '/',
+  adminDashboardUrl = '/admin',
+  clientDashboardUrl = '/client',
+  affiliateDashboardUrl = '/affiliate',
   referralUrl = '',
   registerClientUrl = '/register/client',
+  verificationResendUrl = '/email/verification-resend',
   loginClientUrl = '/login/client',
   logoutUrl = '/logout',
   clientMeUrl = '/api/client/me',
@@ -13,10 +19,15 @@
   clientLicenseDeactivateUrl = '/api/client/license/deactivate',
   clientTransactionsUrl = '/api/client/transactions',
   adminClientsUrl = '/api/admin/clients',
+  adminAffiliatesUrl = '/api/admin/affiliates',
+  adminCommissionsUrl = '/api/admin/commissions',
   adminApplicationsUrl = '/api/admin/applications',
   adminLicensesUrl = '/api/admin/licenses',
   adminTransactionsUrl = '/api/admin/transactions',
   adminPaymentOrdersUrl = '/api/admin/payment-orders',
+  adminLandingContentUrl = '/api/admin/landing-content',
+  adminMailSettingsUrl = '/api/admin/mail-settings',
+  adminMailSettingsTestUrl = '/api/admin/mail-settings/test',
 } = window.SOFTSALE_DATA || {};
 
 let appDialogResolver = null;
@@ -24,12 +35,16 @@ let appDialogResolver = null;
 const APP_ROUTE_KEY = 'softsale_route';
 const DEMO_PORTAL_KEY = 'softsale_demo_portal';
 let adminClientsCache = [];
+let adminAffiliatesCache = [];
+let adminCommissionsCache = [];
 let adminApplicationsCache = [];
 let adminLicensesCache = [];
 let adminTransactionsCache = [];
 let adminPaymentOrdersCache = [];
 let adminPaymentOrdersSearchTimer = null;
 let adminTransactionsActiveTab = 'ledger';
+let adminSettingsActiveTab = 'email';
+let adminLandingCmsCache = {};
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // SVG HELPER
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -44,7 +59,9 @@ const starSVG = svgIcon('<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 1
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 function renderFeatures() {
   const grid = document.getElementById('featuresGrid');
-  grid.innerHTML = FEATURES.map((f, i) => `
+  if (!grid) return;
+  const items = window.SOFTSALE_DATA?.features ?? FEATURES;
+  grid.innerHTML = items.map((f, i) => `
     <div class="glass feature-card reveal reveal-delay-${i % 3 + 1}">
       <div class="feature-icon" style="background:${f.color}12;">
         ${svgIcon(f.icon, 22, f.color)}
@@ -57,7 +74,9 @@ function renderFeatures() {
 
 function renderPricing() {
   const grid = document.getElementById('pricingGrid');
-  grid.innerHTML = PLANS.map((p, i) => `
+  if (!grid) return;
+  const items = window.SOFTSALE_DATA?.plans ?? PLANS;
+  grid.innerHTML = items.map((p, i) => `
     <div class="glass price-card ${p.popular ? 'popular' : ''} reveal reveal-delay-${i + 1}">
       <h3>${p.name}</h3>
       <div style="margin:16px 0 0;">
@@ -76,7 +95,9 @@ function renderPricing() {
 
 function renderTestimonials() {
   const grid = document.getElementById('testiGrid');
-  grid.innerHTML = TESTIMONIALS.map((t, i) => `
+  if (!grid) return;
+  const items = window.SOFTSALE_DATA?.testimonials ?? TESTIMONIALS;
+  grid.innerHTML = items.map((t, i) => `
     <div class="glass testi-card reveal reveal-delay-${i + 1}">
       <div class="testi-stars">${Array(5).fill(starSVG).join('')}</div>
       <p class="testi-text">"${t.text}"</p>
@@ -93,7 +114,9 @@ function renderTestimonials() {
 
 function renderAboutValues() {
   const grid = document.getElementById('aboutValues');
-  grid.innerHTML = ABOUT_VALUES.map((v, i) => `
+  if (!grid) return;
+  const items = window.SOFTSALE_DATA?.aboutValues ?? ABOUT_VALUES;
+  grid.innerHTML = items.map((v, i) => `
     <div class="glass about-val reveal reveal-delay-${i + 1}">
       <div class="about-val-icon" style="background:${v.color}12;">
         ${svgIcon(v.icon, 18, v.color)}
@@ -106,7 +129,9 @@ function renderAboutValues() {
 
 function renderContacts() {
   const grid = document.getElementById('contactGrid');
-  grid.innerHTML = CONTACTS.map((c, i) => `
+  if (!grid) return;
+  const items = window.SOFTSALE_DATA?.contacts ?? CONTACTS;
+  grid.innerHTML = items.map((c, i) => `
     <div class="glass contact-card reveal reveal-delay-${i + 1}">
       <div class="contact-icon" style="background:${c.color}12;">
         ${svgIcon(c.icon, 22, c.color)}
@@ -134,6 +159,7 @@ const sectionIds = ['fitur', 'harga', 'tentang', 'kontak'];
 
 function updateNav() {
   const nav = document.getElementById('navbar');
+  if (!nav) return;
   const scrolled = window.scrollY > 40;
   nav.classList.toggle('scrolled', scrolled);
 
@@ -186,6 +212,7 @@ function animateCounters() {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 function createParticles() {
   const container = document.getElementById('particles');
+  if (!container) return;
   for (let i = 0; i < 18; i++) {
     const p = document.createElement('div');
     p.className = 'particle';
@@ -257,9 +284,71 @@ function showAuthAlert(message, type = 'error') {
   if (!alert) return;
   alert.style.display = 'block';
   alert.textContent = message;
-  alert.style.background = type === 'success' ? 'rgba(16,185,129,0.12)' : 'rgba(240,104,104,0.12)';
-  alert.style.border = type === 'success' ? '1px solid rgba(16,185,129,0.25)' : '1px solid rgba(240,104,104,0.25)';
-  alert.style.color = type === 'success' ? 'var(--green)' : 'var(--rose)';
+  if (type === 'success') {
+    alert.style.background = 'rgba(16,185,129,0.12)';
+    alert.style.border = '1px solid rgba(16,185,129,0.25)';
+    alert.style.color = 'var(--green)';
+  } else if (type === 'warning') {
+    alert.style.background = 'rgba(245,166,35,0.12)';
+    alert.style.border = '1px solid rgba(245,166,35,0.25)';
+    alert.style.color = 'var(--amber)';
+  } else {
+    alert.style.background = 'rgba(240,104,104,0.12)';
+    alert.style.border = '1px solid rgba(240,104,104,0.25)';
+    alert.style.color = 'var(--rose)';
+  }
+}
+
+function showVerificationResend(email) {
+  const wrap = document.getElementById('verificationResendWrap');
+  const emailEl = document.getElementById('verificationResendEmail');
+  if (!wrap || !emailEl) return;
+  emailEl.textContent = email || '';
+  wrap.hidden = false;
+}
+
+function hideVerificationResend() {
+  const wrap = document.getElementById('verificationResendWrap');
+  if (wrap) wrap.hidden = true;
+}
+
+async function resendVerificationEmail() {
+  const email = document.getElementById('verificationResendEmail')?.textContent?.trim()
+    || document.getElementById('loginEmail')?.value?.trim()
+    || document.getElementById('registerEmail')?.value?.trim();
+  if (!email) {
+    showAuthAlert('Masukkan email terlebih dahulu.', 'warning');
+    return;
+  }
+
+  const btn = document.getElementById('verificationResendBtn');
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Mengirim...';
+  }
+
+  try {
+    const response = await fetch(verificationResendUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json();
+    showAuthAlert(data.message || 'Link verifikasi telah dikirim.', data.verified ? 'success' : 'warning');
+    if (data.verified) hideVerificationResend();
+  } catch {
+    showAuthAlert('Gagal mengirim ulang email verifikasi.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Kirim Ulang Link Verifikasi';
+    }
+  }
 }
 
 function clearAuthAlert() {
@@ -268,6 +357,7 @@ function clearAuthAlert() {
     alert.style.display = 'none';
     alert.textContent = '';
   }
+  hideVerificationResend();
 }
 
 function updateClientDashboard(client) {
@@ -547,9 +637,33 @@ async function restoreClientSession() {
 }
 
 function parseRouteHash() {
-  const match = window.location.hash.match(/^#\/(client|admin|affiliate)\/([a-z]+)$/);
+  if (appMode !== 'landing') {
+    const short = window.location.hash.match(/^#\/([a-z-]+)$/);
+    if (short) return { portal: appMode, page: short[1] };
+  }
+
+  const match = window.location.hash.match(/^#\/(client|admin|affiliate)\/([a-z-]+)$/);
   if (!match) return null;
   return { portal: match[1], page: match[2] };
+}
+
+function dashboardUrlFor(portal) {
+  const urls = {
+    admin: adminDashboardUrl,
+    client: clientDashboardUrl,
+    affiliate: affiliateDashboardUrl,
+  };
+  return urls[portal] || landingUrl;
+}
+
+function resolveDashboardPage(portal) {
+  const fromHash = parseRouteHash();
+  if (fromHash?.portal === portal) return fromHash.page;
+
+  const saved = getSavedRoute();
+  if (saved?.portal === portal) return saved.page;
+
+  return 'overview';
 }
 
 function getSavedRoute() {
@@ -563,7 +677,9 @@ function getSavedRoute() {
 
 function saveAppRoute(portal, page) {
   localStorage.setItem(APP_ROUTE_KEY, JSON.stringify({ portal, page }));
-  const hash = `#/${portal}/${page}`;
+  const hash = appMode !== 'landing' && appMode === portal
+    ? `#/${page}`
+    : `#/${portal}/${page}`;
   if (window.location.hash !== hash) {
     history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
   }
@@ -594,7 +710,8 @@ function applyDashboardRoute(portal, page) {
   if (!dash) return;
 
   document.getElementById('appLanding')?.classList.add('hidden');
-  document.getElementById('navbar').style.display = 'none';
+  const navbar = document.getElementById('navbar');
+  if (navbar) navbar.style.display = 'none';
   document.querySelectorAll('.app-dashboard').forEach((d) => d.classList.remove('active'));
   dash.classList.add('active');
 
@@ -609,6 +726,8 @@ function applyDashboardRoute(portal, page) {
   if (portal === 'client' && page === 'license') loadClientLicense();
   if (portal === 'client' && page === 'billing') loadClientBilling();
   if (portal === 'admin' && page === 'clients') refreshAdminClientsTable();
+  if (portal === 'admin' && page === 'affiliates') refreshAdminAffiliatesTable();
+  if (portal === 'admin' && page === 'commissions') refreshAdminCommissionsTable();
   if (portal === 'admin' && page === 'applications') refreshAdminApplicationsTable();
   if (portal === 'admin' && page === 'licenses') refreshAdminLicensesTable();
   if (portal === 'admin' && page === 'transactions') {
@@ -616,34 +735,48 @@ function applyDashboardRoute(portal, page) {
     if (adminTransactionsActiveTab === 'invoices') refreshAdminPaymentOrdersTable();
   }
   if (portal === 'admin' && page === 'overview') renderRevenueBars();
+  if (portal === 'admin' && page === 'landing-cms') refreshAdminLandingCms();
+  if (portal === 'admin' && page === 'settings') {
+    switchAdminSettingsTab(adminSettingsActiveTab);
+    if (adminSettingsActiveTab === 'email') refreshAdminMailSettings();
+  }
 }
 
 async function initAppState() {
-  const savedRoute = parseRouteHash() || getSavedRoute();
-  const clientLoggedIn = await restoreClientSession();
-
-  if (clientLoggedIn) {
-    const page = savedRoute?.portal === 'client' ? savedRoute.page : 'overview';
-    applyDashboardRoute('client', page);
+  if (appMode === 'landing') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('login')) openModal('login');
+    if (params.get('verified') === 'already') {
+      openModal('login');
+      showAuthAlert('Email sudah diverifikasi. Silakan login.', 'success');
+    }
     return;
   }
 
-  const demoPortal = localStorage.getItem(DEMO_PORTAL_KEY);
-  const portal = savedRoute?.portal === 'admin' || savedRoute?.portal === 'affiliate'
-    ? savedRoute.portal
-    : demoPortal;
+  if (appMode === 'client') {
+    const clientLoggedIn = await restoreClientSession();
+    if (!clientLoggedIn) {
+      window.location.href = `${landingUrl}?login=client`;
+      return;
+    }
+    applyDashboardRoute('client', resolveDashboardPage('client'));
+    return;
+  }
 
-  if (portal === 'admin' || portal === 'affiliate') {
-    showDemoDashboard(portal, false);
-    const page = savedRoute?.page || 'overview';
-    applyDashboardRoute(portal, page);
+  if (appMode === 'admin' || appMode === 'affiliate') {
+    applyDashboardRoute(appMode, resolveDashboardPage(appMode));
   }
 }
 
 function showClientDashboard(closeModalOnShow = true) {
   if (closeModalOnShow) closeModal();
-  document.getElementById('appLanding').classList.add('hidden');
-  document.getElementById('navbar').style.display = 'none';
+  if (appMode === 'landing') {
+    window.location.href = clientDashboardUrl;
+    return;
+  }
+  document.getElementById('appLanding')?.classList.add('hidden');
+  const navbar = document.getElementById('navbar');
+  if (navbar) navbar.style.display = 'none';
   document.querySelectorAll('.app-dashboard').forEach((d) => d.classList.remove('active'));
   const dash = document.getElementById('dashClient');
   if (dash) {
@@ -655,8 +788,13 @@ function showClientDashboard(closeModalOnShow = true) {
 
 function showDemoDashboard(role, closeModalOnShow = true) {
   if (closeModalOnShow) closeModal();
-  document.getElementById('appLanding').classList.add('hidden');
-  document.getElementById('navbar').style.display = 'none';
+  if (appMode === 'landing') {
+    window.location.href = dashboardUrlFor(role);
+    return;
+  }
+  document.getElementById('appLanding')?.classList.add('hidden');
+  const navbar = document.getElementById('navbar');
+  if (navbar) navbar.style.display = 'none';
   document.querySelectorAll('.app-dashboard').forEach((d) => d.classList.remove('active'));
 
   const dashMap = { affiliate: 'dashAffiliate', admin: 'dashAdmin' };
@@ -675,8 +813,8 @@ async function submitClientLogin(event) {
 
   const role = getSelectedLoginRole();
   if (role !== 'client') {
-    showDemoDashboard(role);
-    applyDashboardRoute(role, 'overview');
+    closeModal();
+    window.location.href = dashboardUrlFor(role);
     return;
   }
 
@@ -704,6 +842,11 @@ async function submitClientLogin(event) {
     const data = await response.json();
 
     if (!response.ok) {
+      if (response.status === 403 && data.requires_verification) {
+        showAuthAlert(data.message, 'warning');
+        showVerificationResend(data.email || payload.email);
+        return;
+      }
       const firstError = data.errors
         ? Object.values(data.errors).flat()[0]
         : (data.message || 'Login gagal.');
@@ -712,7 +855,11 @@ async function submitClientLogin(event) {
     }
 
     updateClientDashboard(data.client);
-    showClientDashboard();
+    if (appMode === 'landing') {
+      window.location.href = clientDashboardUrl;
+      return;
+    }
+    showClientDashboard(false);
     applyDashboardRoute('client', 'overview');
   } catch (error) {
     showAuthAlert('Terjadi kesalahan jaringan. Silakan coba lagi.');
@@ -767,15 +914,15 @@ async function submitClientRegistration(event) {
       return;
     }
 
-    showAuthAlert(data.message, 'success');
-    updateClientDashboard(data.client);
     form.reset();
     updateRegisterRole('Client');
-
-    setTimeout(() => {
-      showClientDashboard();
-      applyDashboardRoute('client', 'overview');
-    }, 700);
+    switchTab('login');
+    if (data.requires_verification) {
+      showAuthAlert(data.message, 'warning');
+      showVerificationResend(data.email || payload.email);
+    } else {
+      showAuthAlert(data.message, 'success');
+    }
   } catch (error) {
     showAuthAlert('Terjadi kesalahan jaringan. Silakan coba lagi.');
   } finally {
@@ -820,11 +967,19 @@ async function doLogout() {
     // Demo logout tetap jalan meski request gagal.
   }
 
-  document.querySelectorAll('.app-dashboard').forEach((d) => d.classList.remove('active'));
-  document.getElementById('appLanding').classList.remove('hidden');
-  document.getElementById('navbar').style.display = '';
-  window.scrollTo(0, 0);
   clearAppRoute();
+  localStorage.removeItem(DEMO_PORTAL_KEY);
+
+  if (appMode !== 'landing') {
+    window.location.href = landingUrl;
+    return;
+  }
+
+  document.querySelectorAll('.app-dashboard').forEach((d) => d.classList.remove('active'));
+  document.getElementById('appLanding')?.classList.remove('hidden');
+  const navbar = document.getElementById('navbar');
+  if (navbar) navbar.style.display = '';
+  window.scrollTo(0, 0);
 
   // Reset sidebar nav active states
   document.querySelectorAll('.dash-nav-item').forEach((btn, i) => {
@@ -884,7 +1039,7 @@ function renderAdminClientsRows(clients) {
     return `<tr data-client-id="${client.id}">
       <td class="td-bold">${escapeHtml(client.company_name || '—')}</td>
       <td>${escapeHtml(client.name || '—')}</td>
-      <td>${escapeHtml(client.email || '—')}</td>
+      <td>${escapeHtml(client.email || '—')}${client.email_verified ? ' <span class="badge badge-active" style="font-size:10px;padding:2px 6px;margin-left:4px;">Verified</span>' : ''}</td>
       <td>${escapeHtml(apps)}</td>
       <td>${escapeHtml(client.whatsapp || '—')}</td>
       <td><span class="badge ${badge}">${escapeHtml(label)}</span></td>
@@ -926,6 +1081,496 @@ async function refreshAdminClientsTable() {
   }
 }
 
+function adminAffiliateStatusBadge(status) {
+  const map = {
+    active: 'badge-active',
+    pending: 'badge-pending',
+    suspended: 'badge-expired',
+  };
+  return map[status] || 'badge-pending';
+}
+
+function adminAffiliateStatusLabel(status) {
+  const map = {
+    active: 'Active',
+    pending: 'Pending',
+    suspended: 'Suspended',
+  };
+  return map[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Pending');
+}
+
+function renderAdminAffiliatesRows(affiliates) {
+  const tbody = document.getElementById('adminAffiliatesTableBody');
+  const countEl = document.getElementById('adminAffiliatesCount');
+  if (!tbody) return;
+
+  adminAffiliatesCache = affiliates;
+
+  if (countEl) {
+    countEl.textContent = `${affiliates.length} affiliate terdaftar`;
+  }
+
+  if (!affiliates.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada affiliate terdaftar.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = affiliates.map((affiliate) => {
+    const badge = adminAffiliateStatusBadge(affiliate.status);
+    const label = adminAffiliateStatusLabel(affiliate.status);
+    return `<tr data-affiliate-id="${affiliate.id}">
+      <td class="td-mono">${escapeHtml(affiliate.code || '—')}</td>
+      <td class="td-bold">${escapeHtml(affiliate.name || '—')}</td>
+      <td>${escapeHtml(affiliate.email || '—')}</td>
+      <td>${escapeHtml(String(affiliate.sales_count ?? 0))}</td>
+      <td class="td-green">${escapeHtml(affiliate.total_commission_label || 'Rp 0')}</td>
+      <td class="td-amber">${escapeHtml(affiliate.pending_commission_label || 'Rp 0')}</td>
+      <td><span class="badge ${badge}">${escapeHtml(label)}</span></td>
+      <td>
+        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;margin-right:4px;" onclick="openAdminAffiliateTransactionsModal(${affiliate.id})">Detail</button>
+        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;margin-right:4px;" onclick="openAdminAffiliateModal(${affiliate.id})">Edit</button>
+        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;color:var(--rose);" onclick="deleteAdminAffiliate(${affiliate.id})">Hapus</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function refreshAdminAffiliatesTable() {
+  const tbody = document.getElementById('adminAffiliatesTableBody');
+  if (!tbody) return;
+
+  try {
+    const response = await fetch(adminAffiliatesUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      return;
+    }
+
+    renderAdminAffiliatesRows(data.affiliates || []);
+  } catch {
+    // Biarkan data server-side jika request gagal.
+  }
+}
+
+function renderAdminCommissionsRows(commissions = [], summary = {}) {
+  adminCommissionsCache = commissions;
+
+  const totalPaidEl = document.getElementById('adminCommissionsTotalPaid');
+  const pendingEl = document.getElementById('adminCommissionsPending');
+  const totalCountEl = document.getElementById('adminCommissionsTotalCount');
+  const countEl = document.getElementById('adminCommissionsCount');
+  const tbody = document.getElementById('adminCommissionsTableBody');
+
+  if (totalPaidEl) totalPaidEl.textContent = summary.total_paid_out_label || 'Rp 0';
+  if (pendingEl) pendingEl.textContent = summary.pending_payout_label || 'Rp 0';
+  if (totalCountEl) totalCountEl.textContent = String(summary.total_count ?? commissions.length ?? 0);
+  if (countEl) countEl.textContent = `${commissions.length} komisi referral`;
+
+  if (!tbody) return;
+
+  if (!commissions.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:24px;">Belum ada komisi affiliate.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = commissions.map((item) => {
+    const isPaid = item.payout_status === 'paid';
+    const badge = isPaid ? 'badge-paid' : 'badge-pending';
+    const amountClass = isPaid ? 'td-green' : 'td-amber';
+    const actionCell = isPaid
+      ? ''
+      : `<button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:11px;" onclick="payAdminCommission(${item.id})">Bayar</button>`;
+
+    return `<tr data-commission-id="${item.id}">
+      <td class="td-mono">${escapeHtml(item.affiliate_code || '—')}</td>
+      <td>${escapeHtml(item.client_name || '—')}</td>
+      <td>${escapeHtml(item.package_name || '—')}</td>
+      <td class="${amountClass}">${escapeHtml(item.commission_label || '—')}</td>
+      <td>${escapeHtml(item.date || '—')}</td>
+      <td><span class="badge ${badge}">${escapeHtml(item.payout_status_label || '—')}</span></td>
+      <td>${actionCell}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function refreshAdminCommissionsTable() {
+  const tbody = document.getElementById('adminCommissionsTableBody');
+  if (!tbody) return;
+
+  try {
+    const response = await fetch(adminCommissionsUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--rose);padding:24px;">Gagal memuat data komisi.</td></tr>';
+      return;
+    }
+
+    renderAdminCommissionsRows(data.commissions || [], data.summary || {});
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--rose);padding:24px;">Gagal memuat data komisi.</td></tr>';
+  }
+}
+
+async function payAdminCommission(orderId) {
+  const confirmed = await openAppDialog({
+    type: 'confirm',
+    title: 'Bayar Komisi',
+    message: 'Tandai komisi ini sebagai sudah dibayar ke affiliate?',
+    okText: 'Bayar',
+  });
+
+  if (!confirmed) return;
+
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  try {
+    const response = await fetch(`${adminCommissionsUrl}/${orderId}/pay`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      await openAppDialog({
+        type: 'alert',
+        title: 'Gagal',
+        message: data.message || 'Gagal memproses pembayaran komisi.',
+      });
+      return;
+    }
+
+    await refreshAdminCommissionsTable();
+    await refreshAdminAffiliatesTable();
+  } catch {
+    await openAppDialog({
+      type: 'alert',
+      title: 'Gagal',
+      message: 'Terjadi kesalahan jaringan. Silakan coba lagi.',
+    });
+  }
+}
+
+function showAdminAffiliateAlert(message, type = 'error') {
+  const alert = document.getElementById('adminAffiliateAlert');
+  if (!alert) return;
+  alert.hidden = false;
+  alert.textContent = message;
+  alert.className = `admin-app-alert ${type === 'success' ? 'is-success' : 'is-error'}`;
+}
+
+function clearAdminAffiliateAlert() {
+  const alert = document.getElementById('adminAffiliateAlert');
+  if (!alert) return;
+  alert.hidden = true;
+  alert.textContent = '';
+  alert.className = 'admin-app-alert';
+}
+
+function getAdminAffiliateFromCache(affiliateId) {
+  return adminAffiliatesCache.find((item) => Number(item.id) === Number(affiliateId)) || null;
+}
+
+function getAdminAffiliateFromDom(affiliateId) {
+  const cached = getAdminAffiliateFromCache(affiliateId);
+  if (cached) return cached;
+
+  const row = document.querySelector(`#adminAffiliatesTableBody tr[data-affiliate-id="${affiliateId}"]`);
+  if (!row || !row.cells?.length) return null;
+
+  const statusText = (row.querySelector('.badge')?.textContent.trim() || 'Pending').toLowerCase();
+
+  return {
+    id: Number(affiliateId),
+    code: row.cells[0].textContent.trim(),
+    name: row.cells[1].textContent.trim(),
+    email: row.cells[2].textContent.trim(),
+    status: statusText === 'active' ? 'active' : statusText === 'suspended' ? 'suspended' : 'pending',
+  };
+}
+
+function switchAdminAffiliatePanel(panel, btn) {
+  const modal = document.getElementById('adminAffiliateModal');
+  if (!modal) return;
+  modal.querySelectorAll('.admin-app-nav-item').forEach((el) => {
+    el.classList.toggle('active', el === btn || el.dataset.panel === panel);
+  });
+  modal.querySelectorAll('.admin-app-panel').forEach((el) => {
+    el.classList.toggle('active', el.dataset.panel === panel);
+  });
+}
+
+async function openAdminAffiliateModal(affiliateId = null) {
+  const modal = document.getElementById('adminAffiliateModal');
+  const form = document.getElementById('adminAffiliateForm');
+  if (!modal || !form) return;
+
+  if (affiliateId && !getAdminAffiliateFromCache(affiliateId)) {
+    await refreshAdminAffiliatesTable();
+  }
+
+  clearAdminAffiliateAlert();
+  form.reset();
+  switchAdminAffiliatePanel('general', modal.querySelector('.admin-app-nav-item[data-panel="general"]'));
+
+  const idEl = document.getElementById('adminAffiliateId');
+  const titleEl = document.getElementById('adminAffiliateModalTitle');
+  const passwordEl = document.getElementById('adminAffiliatePassword');
+  const passwordHint = document.getElementById('adminAffiliatePasswordHint');
+  const codeEl = document.getElementById('adminAffiliateCode');
+  const submitBtn = document.getElementById('adminAffiliateSubmitBtn');
+
+  let affiliate = null;
+  if (affiliateId) {
+    affiliate = getAdminAffiliateFromDom(affiliateId);
+    if (!affiliate) {
+      showAdminAffiliateAlert('Data affiliate tidak ditemukan. Muat ulang halaman.');
+      return;
+    }
+  }
+
+  if (idEl) idEl.value = affiliate ? affiliate.id : '';
+  if (titleEl) titleEl.textContent = affiliate ? 'Edit Affiliate' : 'Tambah Affiliate';
+  if (passwordEl) {
+    passwordEl.required = !affiliate;
+    passwordEl.value = '';
+  }
+  if (passwordHint) {
+    passwordHint.textContent = affiliate ? '(kosongkan jika tidak diubah)' : '(wajib)';
+  }
+  if (codeEl) {
+    codeEl.value = affiliate?.code || '';
+    codeEl.placeholder = 'AA0001';
+  }
+  if (submitBtn) submitBtn.textContent = affiliate ? 'Simpan Perubahan' : 'Simpan';
+
+  document.getElementById('adminAffiliateName').value = affiliate?.name || '';
+  document.getElementById('adminAffiliateEmail').value = affiliate?.email || '';
+  document.getElementById('adminAffiliateWhatsapp').value = affiliate?.whatsapp || '';
+  document.getElementById('adminAffiliateStatus').value = affiliate?.status || 'pending';
+  document.getElementById('adminAffiliateBankName').value = affiliate?.bank_name || '';
+  document.getElementById('adminAffiliateBankAccount').value = affiliate?.bank_account || '';
+  document.getElementById('adminAffiliateBankAccountName').value = affiliate?.bank_account_name || '';
+
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAdminAffiliateModal() {
+  const modal = document.getElementById('adminAffiliateModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  document.body.style.overflow = '';
+  clearAdminAffiliateAlert();
+  switchAdminAffiliatePanel('general', modal.querySelector('.admin-app-nav-item[data-panel="general"]'));
+}
+
+async function submitAdminAffiliateForm(event) {
+  event.preventDefault();
+  clearAdminAffiliateAlert();
+
+  const affiliateId = document.getElementById('adminAffiliateId')?.value?.trim();
+  const isEdit = Boolean(affiliateId);
+  const password = document.getElementById('adminAffiliatePassword')?.value || '';
+
+  if (!isEdit && password.length < 8) {
+    showAdminAffiliateAlert('Password wajib diisi minimal 8 karakter.');
+    return;
+  }
+
+  const payload = {
+    name: document.getElementById('adminAffiliateName')?.value?.trim() || '',
+    email: document.getElementById('adminAffiliateEmail')?.value?.trim() || '',
+    code: document.getElementById('adminAffiliateCode')?.value?.trim() || '',
+    whatsapp: document.getElementById('adminAffiliateWhatsapp')?.value?.trim() || '',
+    bank_name: document.getElementById('adminAffiliateBankName')?.value?.trim() || '',
+    bank_account: document.getElementById('adminAffiliateBankAccount')?.value?.trim() || '',
+    bank_account_name: document.getElementById('adminAffiliateBankAccountName')?.value?.trim() || '',
+    status: document.getElementById('adminAffiliateStatus')?.value || 'pending',
+  };
+
+  if (password) payload.password = password;
+
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const submitBtn = document.getElementById('adminAffiliateSubmitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Menyimpan...';
+
+  try {
+    const response = await fetch(isEdit ? `${adminAffiliatesUrl}/${affiliateId}` : adminAffiliatesUrl, {
+      method: isEdit ? 'PUT' : 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const firstError = data.errors ? Object.values(data.errors).flat()[0] : null;
+      showAdminAffiliateAlert(firstError || data.message || 'Gagal menyimpan affiliate.');
+      return;
+    }
+
+    showAdminAffiliateAlert(data.message || 'Affiliate berhasil disimpan.', 'success');
+    await refreshAdminAffiliatesTable();
+    setTimeout(() => closeAdminAffiliateModal(), 500);
+  } catch {
+    showAdminAffiliateAlert('Terjadi kesalahan jaringan. Silakan coba lagi.');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = isEdit ? 'Simpan Perubahan' : 'Simpan';
+  }
+}
+
+async function openAdminAffiliateTransactionsModal(affiliateId) {
+  const modal = document.getElementById('adminAffiliateTransactionsModal');
+  const tbody = document.getElementById('adminAffiliateTransactionsBody');
+  if (!modal || !tbody) return;
+
+  if (!getAdminAffiliateFromCache(affiliateId)) {
+    await refreshAdminAffiliatesTable();
+  }
+
+  const affiliate = getAdminAffiliateFromDom(affiliateId);
+  if (!affiliate) return;
+
+  const titleEl = document.getElementById('adminAffiliateTransactionsTitle');
+  const subtitleEl = document.getElementById('adminAffiliateTransactionsSubtitle');
+  if (titleEl) titleEl.textContent = `Transaksi Referral — ${affiliate.code || '—'}`;
+  if (subtitleEl) {
+    subtitleEl.textContent = affiliate.name
+      ? `${affiliate.name} · ${affiliate.email || ''}`.trim()
+      : 'Daftar transaksi dari kode affiliate';
+  }
+
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  try {
+    const response = await fetch(`${adminAffiliatesUrl}/${affiliateId}/transactions`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi affiliate.</td></tr>';
+      return;
+    }
+
+    renderAdminAffiliateTransactionsSummary(data.summary || {});
+    renderAdminAffiliateTransactionsRows(data.transactions || []);
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi affiliate.</td></tr>';
+  }
+}
+
+function closeAdminAffiliateTransactionsModal() {
+  const modal = document.getElementById('adminAffiliateTransactionsModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function renderAdminAffiliateTransactionsSummary(summary) {
+  const totalEl = document.getElementById('adminAffiliateTrxTotalCount');
+  const paidEl = document.getElementById('adminAffiliateTrxPaidCount');
+  const pendingEl = document.getElementById('adminAffiliateTrxPendingCount');
+  const amountEl = document.getElementById('adminAffiliateTrxPaidAmount');
+
+  if (totalEl) totalEl.textContent = String(summary.total_count ?? 0);
+  if (paidEl) paidEl.textContent = String(summary.paid_count ?? 0);
+  if (pendingEl) pendingEl.textContent = String(summary.pending_count ?? 0);
+  if (amountEl) {
+    amountEl.textContent = summary.paid_amount_label || formatAdminCurrency(summary.paid_amount || 0);
+  }
+}
+
+function renderAdminAffiliateTransactionsRows(transactions) {
+  const tbody = document.getElementById('adminAffiliateTransactionsBody');
+  if (!tbody) return;
+
+  if (!transactions.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada transaksi dari kode affiliate ini.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = transactions.map((trx) => {
+    const badge = adminPaymentOrderStatusBadge(trx.status);
+    const statusLabel = trx.status_label || trx.status || '—';
+    const packageLabel = [trx.application_name, trx.package_name].filter(Boolean).join(' · ') || '—';
+    const dateLabel = trx.paid_at_date || trx.paid_at || trx.created_at || '—';
+
+    return `<tr>
+      <td class="td-mono">
+        <span class="cell-main">${escapeHtml(trx.reference || trx.order_id || '—')}</span>
+        <span class="cell-sub">${escapeHtml(trx.referral_code || '—')}</span>
+      </td>
+      <td class="td-bold">
+        <span class="cell-main">${escapeHtml(trx.customer_name || '—')}</span>
+        <span class="cell-sub">${escapeHtml(trx.customer_email || '—')}</span>
+      </td>
+      <td>${escapeHtml(packageLabel)}</td>
+      <td>${escapeHtml(trx.type_label || trx.type || '—')}</td>
+      <td class="td-green">${escapeHtml(trx.amount_label || formatAdminCurrency(trx.amount))}</td>
+      <td class="td-amber">${escapeHtml(trx.commission_label || (trx.commission_amount ? formatAdminCurrency(trx.commission_amount) : '—'))}</td>
+      <td><span class="badge ${badge}">${escapeHtml(statusLabel)}</span></td>
+      <td>${escapeHtml(dateLabel)}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function deleteAdminAffiliate(affiliateId) {
+  const confirmed = await openAppDialog({
+    type: 'confirm',
+    title: 'Hapus Affiliate',
+    message: 'Yakin ingin menghapus affiliate ini? Akun login affiliate juga akan dihapus.',
+    okText: 'Hapus',
+    danger: true,
+  });
+  if (!confirmed) return;
+
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  try {
+    const response = await fetch(`${adminAffiliatesUrl}/${affiliateId}`, {
+      method: 'DELETE',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      await showAppAlert(data.message || 'Gagal menghapus affiliate.');
+      return;
+    }
+
+    await refreshAdminAffiliatesTable();
+  } catch {
+    await showAppAlert('Terjadi kesalahan jaringan. Silakan coba lagi.');
+  }
+}
+
 function adminApplicationStatusBadge(isActive) {
   return isActive ? 'badge-active' : 'badge-expired';
 }
@@ -960,6 +1605,7 @@ function renderAdminApplicationPackageAccordionBody(packages) {
         <th>Limit</th>
         <th>Hari</th>
         <th>Harga</th>
+        <th>Komisi</th>
       </tr>
     </thead>
     <tbody>
@@ -968,6 +1614,7 @@ function renderAdminApplicationPackageAccordionBody(packages) {
         <td>${Number(pkg.devices_quota ?? 0)}</td>
         <td>${formatAdminPackageDaysLabel(pkg.duration_days)}</td>
         <td class="acc-price">${escapeHtml(formatAdminPackagePriceDisplay(pkg.price))}</td>
+        <td>${escapeHtml(formatAdminPackageCommissionLabel(pkg))}</td>
       </tr>`).join('')}
     </tbody>
   </table>`;
@@ -1284,13 +1931,16 @@ function renderAdminTransactionsRows(transactions) {
   }
 
   if (!transactions.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada transaksi.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada transaksi.</td></tr>';
     return;
   }
 
   tbody.innerHTML = transactions.map((trx) => {
     const badge = adminTransactionStatusBadge(trx.status);
     const statusLabel = trx.status_label || trx.status || '—';
+    const referralCell = trx.referral_label && trx.referral_label !== '—'
+      ? `<span class="cell-main">${escapeHtml(trx.referral_code || '—')}</span>${trx.affiliate_name ? `<span class="cell-sub">${escapeHtml(trx.affiliate_name)}</span>` : ''}`
+      : '<span style="color:var(--text-3);font-size:11px;">—</span>';
     const gatewayCell = trx.has_gateway_details
       ? `<button type="button" class="admin-app-acc-toggle" onclick="toggleAdminTransactionGateway(${trx.id}, this)" aria-expanded="false">
           <span>Detail</span>
@@ -1305,12 +1955,13 @@ function renderAdminTransactionsRows(transactions) {
       <td>${escapeHtml(trx.description || '—')}</td>
       <td class="td-green">${escapeHtml(trx.amount_label || formatAdminCurrency(trx.amount))}</td>
       <td>${escapeHtml(trx.payment_method_label || trx.payment_method || '—')}</td>
+      <td>${referralCell}</td>
       <td>${escapeHtml(trx.paid_at_date || trx.paid_at || '—')}</td>
       <td><span class="badge ${badge}">${escapeHtml(statusLabel)}</span></td>
       <td>${gatewayCell}</td>
     </tr>
     <tr class="admin-trx-acc-row" id="adminTrxAcc-${trx.id}" hidden>
-      <td colspan="9">
+      <td colspan="10">
         <div class="admin-trx-acc-panel">
           ${renderAdminTransactionGatewayBody(trx.gateway || {})}
         </div>
@@ -1331,14 +1982,14 @@ async function refreshAdminTransactionsTable() {
     const data = await response.json();
 
     if (!response.ok) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi.</td></tr>';
       return;
     }
 
     renderAdminTransactionsSummary(data.summary || {});
     renderAdminTransactionsRows(data.transactions || []);
   } catch {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi.</td></tr>';
   }
 }
 
@@ -1404,7 +2055,7 @@ function renderAdminPaymentOrdersRows(orders) {
   }
 
   if (!orders.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada invoice gateway.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada invoice gateway.</td></tr>';
     return;
   }
 
@@ -1416,6 +2067,9 @@ function renderAdminPaymentOrdersRows(orders) {
     const badgeClass = order.has_gateway_mismatch && order.gateway_status
       ? adminPaymentOrderStatusBadge(String(order.gateway_status).toLowerCase())
       : badge;
+    const referralCell = order.referral_label && order.referral_label !== '—'
+      ? `<span class="cell-main">${escapeHtml(order.referral_code || '—')}</span>${order.affiliate_name ? `<span class="cell-sub">${escapeHtml(order.affiliate_name)}</span>` : ''}`
+      : '<span style="color:var(--text-3);font-size:11px;">—</span>';
 
     return `<tr class="admin-pay-main-row" data-payment-order-id="${order.id}">
       <td class="td-mono">
@@ -1428,6 +2082,7 @@ function renderAdminPaymentOrdersRows(orders) {
         <span class="cell-sub">${escapeHtml(order.payment_type_label || order.payment_type || '—')}</span>
       </td>
       <td><span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span></td>
+      <td>${referralCell}</td>
       <td>${escapeHtml(order.expires_at || '—')}</td>
       <td>
         <button type="button" class="admin-app-acc-toggle" onclick="toggleAdminPaymentOrderGateway(${order.id}, this)" aria-expanded="false">
@@ -1437,7 +2092,7 @@ function renderAdminPaymentOrdersRows(orders) {
       </td>
     </tr>
     <tr class="admin-trx-acc-row" id="adminPayAcc-${order.id}" hidden>
-      <td colspan="6">
+      <td colspan="7">
         <div class="admin-trx-acc-panel">
           ${renderAdminTransactionGatewayBody(order.gateway || {})}
         </div>
@@ -1472,14 +2127,14 @@ async function refreshAdminPaymentOrdersTable() {
     const data = await response.json();
 
     if (!response.ok) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat invoice gateway.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat invoice gateway.</td></tr>';
       return;
     }
 
     renderAdminPaymentOrdersSummary(data.summary || {});
     renderAdminPaymentOrdersRows(data.orders || []);
   } catch {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat invoice gateway.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat invoice gateway.</td></tr>';
   }
 }
 
@@ -1487,6 +2142,143 @@ function formatAdminPackagePrice(value) {
   const num = Number(value ?? 0);
   if (Number.isNaN(num)) return '0';
   return String(num);
+}
+
+function parseAdminPackagePriceInput(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return 0;
+  const cleaned = raw.replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.');
+  const num = Number(cleaned);
+  return Number.isNaN(num) ? 0 : Math.max(0, num);
+}
+
+function formatAdminPackagePriceDisplay(value) {
+  const num = Math.max(0, Number(value ?? 0));
+  if (Number.isNaN(num)) return 'Rp 0';
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(num);
+}
+
+function bindAdminPackagePriceInput(input) {
+  if (!input || input.dataset.priceBound === '1') return;
+  input.dataset.priceBound = '1';
+
+  input.addEventListener('focus', () => {
+    input.value = String(parseAdminPackagePriceInput(input.value));
+    input.select();
+  });
+
+  input.addEventListener('blur', () => {
+    input.value = formatAdminPackagePriceDisplay(parseAdminPackagePriceInput(input.value));
+  });
+}
+
+function formatAdminPackageCommissionLabel(pkg = {}, saleAmount = null) {
+  const percent = Number(pkg.affiliate_commission_percent ?? 0);
+  const fixed = Number(pkg.affiliate_commission_fixed ?? 0);
+  const price = saleAmount !== null ? Number(saleAmount) : Number(pkg.price ?? 0);
+
+  if (percent > 0) {
+    const amount = Math.round(price * (percent / 100));
+    return `${formatAdminPackagePrice(percent)}% (Rp ${formatAdminPackagePrice(amount)})`;
+  }
+
+  if (fixed > 0) {
+    return `Rp ${formatAdminPackagePrice(fixed)}`;
+  }
+
+  return '—';
+}
+
+function formatAdminPackageCommissionPercent(value) {
+  const num = Number(value ?? 0);
+  if (Number.isNaN(num) || num === 0) return '0';
+  const rounded = Math.round(num * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+}
+
+function getAdminPackageRowPrice(row) {
+  return parseAdminPackagePriceInput(row?.querySelector('.pkg-price')?.value || 0);
+}
+
+function setAdminPackageCommissionFields(row, { fixed, percent }, source) {
+  if (!row) return;
+  row.dataset.commissionUpdating = '1';
+  const fixedEl = row.querySelector('.pkg-commission-fixed');
+  const percentEl = row.querySelector('.pkg-commission-percent');
+  if (fixedEl && typeof fixed !== 'undefined') fixedEl.value = formatAdminPackagePrice(fixed);
+  if (percentEl && typeof percent !== 'undefined') percentEl.value = formatAdminPackageCommissionPercent(percent);
+  if (source) row.dataset.commissionSource = source;
+  delete row.dataset.commissionUpdating;
+}
+
+function syncAdminPackageCommissionFromFixed(row) {
+  const price = getAdminPackageRowPrice(row);
+  const fixed = Math.max(0, Number(row.querySelector('.pkg-commission-fixed')?.value || 0));
+  if (price <= 0) {
+    setAdminPackageCommissionFields(row, { percent: 0 }, 'fixed');
+    return;
+  }
+  const percent = fixed > 0 ? (fixed / price) * 100 : 0;
+  setAdminPackageCommissionFields(row, { percent }, 'fixed');
+}
+
+function syncAdminPackageCommissionFromPercent(row) {
+  const price = getAdminPackageRowPrice(row);
+  const percent = Math.max(0, Number(row.querySelector('.pkg-commission-percent')?.value || 0));
+  if (price <= 0) {
+    setAdminPackageCommissionFields(row, { fixed: 0 }, 'percent');
+    return;
+  }
+  const fixed = percent > 0 ? Math.round(price * (percent / 100)) : 0;
+  setAdminPackageCommissionFields(row, { fixed }, 'percent');
+}
+
+function syncAdminPackageCommissionFromPrice(row) {
+  const source = row?.dataset?.commissionSource || 'percent';
+  if (source === 'fixed') syncAdminPackageCommissionFromFixed(row);
+  else syncAdminPackageCommissionFromPercent(row);
+}
+
+function bindAdminPackageCommissionSync(row) {
+  if (!row || row.dataset.commissionBound === '1') return;
+  row.dataset.commissionBound = '1';
+
+  const priceEl = row.querySelector('.pkg-price');
+  const fixedEl = row.querySelector('.pkg-commission-fixed');
+  const percentEl = row.querySelector('.pkg-commission-percent');
+
+  fixedEl?.addEventListener('input', () => {
+    if (row.dataset.commissionUpdating) return;
+    syncAdminPackageCommissionFromFixed(row);
+  });
+
+  percentEl?.addEventListener('input', () => {
+    if (row.dataset.commissionUpdating) return;
+    syncAdminPackageCommissionFromPercent(row);
+  });
+
+  priceEl?.addEventListener('input', () => {
+    if (row.dataset.commissionUpdating) return;
+    syncAdminPackageCommissionFromPrice(row);
+  });
+}
+
+function initializeAdminPackageCommissionRow(row, pkg = {}) {
+  bindAdminPackageCommissionSync(row);
+  const percent = Number(pkg.affiliate_commission_percent ?? 0);
+  const fixed = Number(pkg.affiliate_commission_fixed ?? 0);
+  if (percent > 0) {
+    row.dataset.commissionSource = 'percent';
+    syncAdminPackageCommissionFromPercent(row);
+  } else if (fixed > 0) {
+    row.dataset.commissionSource = 'fixed';
+    syncAdminPackageCommissionFromFixed(row);
+  }
 }
 
 function updateAdminApplicationPackagesEmptyState() {
@@ -1515,10 +2307,15 @@ function addAdminApplicationPackageRow(pkg = {}) {
         <button type="button" class="pkg-unlimited-btn${isUnlimited ? ' is-on' : ''}" onclick="toggleAdminPackageUnlimited(this)" title="Unlimited (∞)">∞</button>
       </div>
     </td>
-    <td><input class="admin-app-input pkg-price" type="number" min="0" step="0.01" value="${formatAdminPackagePrice(pkg.price ?? 0)}" required></td>
-    <td><button type="button" class="admin-app-pkg-remove" title="Hapus paket" onclick="removeAdminApplicationPackageRow(this)">×</button></td>
+    <td class="pkg-price-cell"><input class="admin-app-input pkg-price" type="text" inputmode="numeric" value="${formatAdminPackagePriceDisplay(pkg.price ?? 0)}" required></td>
+    <td class="pkg-discount-cell"><input class="admin-app-input pkg-discount" type="number" min="0" max="100" step="0.01" value="${formatAdminPackageCommissionPercent(pkg.discount_percent ?? 0)}" placeholder="0"></td>
+    <td class="pkg-commission-fixed-cell"><input class="admin-app-input pkg-commission-fixed" type="number" min="0" step="1" value="${formatAdminPackagePrice(pkg.affiliate_commission_fixed ?? 0)}" placeholder="0"></td>
+    <td class="pkg-commission-percent-cell"><input class="admin-app-input pkg-commission-percent" type="number" min="0" max="100" step="0.01" value="${formatAdminPackagePrice(pkg.affiliate_commission_percent ?? 0)}" placeholder="0"></td>
+    <td class="col-pkg-actions-cell"><button type="button" class="admin-app-pkg-remove" title="Hapus paket" onclick="removeAdminApplicationPackageRow(this)">×</button></td>
   `;
   body.appendChild(row);
+  bindAdminPackagePriceInput(row.querySelector('.pkg-price'));
+  initializeAdminPackageCommissionRow(row, pkg);
   updateAdminApplicationPackagesEmptyState();
 }
 
@@ -1573,7 +2370,10 @@ function collectAdminApplicationPackages() {
       duration_days: row.querySelector('.pkg-days-wrap')?.classList.contains('is-unlimited')
         ? 0
         : Number(row.querySelector('.pkg-days')?.value || 1),
-      price: Number(row.querySelector('.pkg-price')?.value || 0),
+      price: parseAdminPackagePriceInput(row.querySelector('.pkg-price')?.value || 0),
+      discount_percent: Number(row.querySelector('.pkg-discount')?.value || 0),
+      affiliate_commission_fixed: Number(row.querySelector('.pkg-commission-fixed')?.value || 0),
+      affiliate_commission_percent: Number(row.querySelector('.pkg-commission-percent')?.value || 0),
       sort_order: index,
     });
   });
@@ -1984,6 +2784,7 @@ function openAdminClientModal(clientId = null) {
     document.getElementById('adminClientName').value = client.name || '';
     document.getElementById('adminClientCompany').value = client.company_name || '';
     document.getElementById('adminClientEmail').value = client.email || '';
+    document.getElementById('adminClientEmailVerified').checked = !!client.email_verified;
     document.getElementById('adminClientWhatsapp').value = client.whatsapp || '';
     document.getElementById('adminClientStatus').value = client.status || 'active';
     passwordInput.required = false;
@@ -1993,6 +2794,7 @@ function openAdminClientModal(clientId = null) {
     title.textContent = 'Tambah Client';
     idInput.value = '';
     document.getElementById('adminClientStatus').value = 'active';
+    document.getElementById('adminClientEmailVerified').checked = false;
     passwordInput.required = true;
     passwordHint.textContent = '(wajib)';
     renderAdminClientApplicationOptions([]);
@@ -2032,6 +2834,7 @@ async function submitAdminClientForm(event) {
     name: document.getElementById('adminClientName')?.value.trim(),
     company_name: document.getElementById('adminClientCompany')?.value.trim(),
     email: document.getElementById('adminClientEmail')?.value.trim(),
+    email_verified: !!document.getElementById('adminClientEmailVerified')?.checked,
     whatsapp: document.getElementById('adminClientWhatsapp')?.value.trim(),
     status: document.getElementById('adminClientStatus')?.value,
     applications: getSelectedAdminClientApplications(),
@@ -2147,6 +2950,534 @@ function renderRevenueBars() {
   });
 }
 
+function showAdminLandingAlert(message, type = 'success') {
+  const el = document.getElementById('adminLandingAlert');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.toggle('is-error', type === 'error');
+  el.classList.toggle('is-success', type !== 'error');
+}
+
+function switchAdminLandingPanel(panel, btn) {
+  const root = document.getElementById('admin-landing-cms');
+  if (!root) return;
+  root.querySelectorAll('.admin-app-nav-item').forEach((el) => el.classList.toggle('active', el === btn));
+  root.querySelectorAll('.admin-app-panel').forEach((el) => el.classList.toggle('active', el.dataset.panel === panel));
+}
+
+function adminLandingStatRowHtml(stat = {}) {
+  return `<tr class="admin-cms-stat-row">
+    <td><input class="admin-app-input cms-stat-value" type="text" value="${escapeHtml(stat.value || '')}"></td>
+    <td><input class="admin-app-input cms-stat-label" type="text" value="${escapeHtml(stat.label || '')}"></td>
+    <td style="text-align:center;"><input class="cms-stat-animate" type="checkbox"${stat.animate ? ' checked' : ''}></td>
+    <td><button type="button" class="admin-cms-remove" onclick="this.closest('tr').remove()">Hapus</button></td>
+  </tr>`;
+}
+
+function addAdminLandingStatRow(tbodyId) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  tbody.insertAdjacentHTML('beforeend', adminLandingStatRowHtml());
+}
+
+function collectAdminLandingStats(tbodyId) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return [];
+  return [...tbody.querySelectorAll('.admin-cms-stat-row')].map((row) => ({
+    value: row.querySelector('.cms-stat-value')?.value?.trim() || '',
+    label: row.querySelector('.cms-stat-label')?.value?.trim() || '',
+    animate: !!row.querySelector('.cms-stat-animate')?.checked,
+  })).filter((item) => item.value && item.label);
+}
+
+function adminLandingFeatureCardHtml(item = {}, prefix = 'cms-feature', label = 'Fitur') {
+  return `<div class="admin-cms-card admin-cms-${prefix.replace('cms-', '')}-row">
+    <div class="admin-cms-card-head"><span>${label}</span><button type="button" class="admin-cms-remove" onclick="this.closest('.admin-cms-card').remove()">Hapus</button></div>
+    <div class="admin-app-form-grid">
+      <div class="form-group"><label class="admin-app-label">Judul</label><input class="admin-app-input ${prefix}-title" type="text" value="${escapeHtml(item.title || '')}"></div>
+      <div class="form-group"><label class="admin-app-label">Warna</label><input class="admin-app-input ${prefix}-color" type="text" value="${escapeHtml(item.color || 'var(--accent-1)')}"></div>
+    </div>
+    <div class="form-group"><label class="admin-app-label">Deskripsi</label><textarea class="admin-app-input ${prefix}-desc" rows="2">${escapeHtml(item.desc || '')}</textarea></div>
+    <div class="form-group"><label class="admin-app-label">SVG Path Icon</label><textarea class="admin-app-input ${prefix}-icon" rows="2" placeholder="<path d=.../>">${escapeHtml(item.icon || '')}</textarea></div>
+  </div>`;
+}
+
+function addAdminLandingFeatureRow(item = {}) {
+  document.getElementById('cmsFeaturesItems')?.insertAdjacentHTML('beforeend', adminLandingFeatureCardHtml(item, 'cms-feature', 'Fitur'));
+}
+
+function adminLandingPricingCardHtml(item = {}) {
+  const features = Array.isArray(item.features) ? item.features.join('\n') : '';
+  return `<div class="admin-cms-card admin-cms-pricing-row">
+    <div class="admin-cms-card-head"><span>Paket</span><button type="button" class="admin-cms-remove" onclick="this.closest('.admin-cms-card').remove()">Hapus</button></div>
+    <div class="admin-app-form-grid">
+      <div class="form-group"><label class="admin-app-label">Nama</label><input class="admin-app-input cms-pricing-name" type="text" value="${escapeHtml(item.name || '')}"></div>
+      <div class="form-group"><label class="admin-app-label">Harga</label><input class="admin-app-input cms-pricing-price" type="text" value="${escapeHtml(item.price || '')}"></div>
+      <div class="form-group"><label class="admin-app-label">Periode</label><input class="admin-app-input cms-pricing-period" type="text" value="${escapeHtml(item.period || '')}"></div>
+      <div class="form-group" style="display:flex;align-items:end;padding-bottom:8px;"><label style="display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text-2);"><input class="cms-pricing-popular" type="checkbox"${item.popular ? ' checked' : ''}> Populer</label></div>
+    </div>
+    <div class="form-group"><label class="admin-app-label">Fitur paket (satu per baris)</label><textarea class="admin-app-input cms-pricing-features" rows="4">${escapeHtml(features)}</textarea></div>
+  </div>`;
+}
+
+function addAdminLandingPricingRow(item = {}) {
+  document.getElementById('cmsPricingItems')?.insertAdjacentHTML('beforeend', adminLandingPricingCardHtml(item));
+}
+
+function adminLandingTestimonialCardHtml(item = {}) {
+  return `<div class="admin-cms-card admin-cms-testimonial-row">
+    <div class="admin-cms-card-head"><span>Testimonial</span><button type="button" class="admin-cms-remove" onclick="this.closest('.admin-cms-card').remove()">Hapus</button></div>
+    <div class="admin-app-form-grid">
+      <div class="form-group"><label class="admin-app-label">Nama</label><input class="admin-app-input cms-testimonial-name" type="text" value="${escapeHtml(item.name || '')}"></div>
+      <div class="form-group"><label class="admin-app-label">Avatar (2 huruf)</label><input class="admin-app-input cms-testimonial-avatar" type="text" maxlength="4" value="${escapeHtml(item.avatar || '')}"></div>
+    </div>
+    <div class="form-group"><label class="admin-app-label">Role / Perusahaan</label><input class="admin-app-input cms-testimonial-role" type="text" value="${escapeHtml(item.role || '')}"></div>
+    <div class="form-group"><label class="admin-app-label">Ulasan</label><textarea class="admin-app-input cms-testimonial-text" rows="3">${escapeHtml(item.text || '')}</textarea></div>
+  </div>`;
+}
+
+function addAdminLandingTestimonialRow(item = {}) {
+  document.getElementById('cmsTestimonialsItems')?.insertAdjacentHTML('beforeend', adminLandingTestimonialCardHtml(item));
+}
+
+function adminLandingContactCardHtml(item = {}) {
+  return `<div class="admin-cms-card admin-cms-contact-row">
+    <div class="admin-cms-card-head"><span>Kontak</span><button type="button" class="admin-cms-remove" onclick="this.closest('.admin-cms-card').remove()">Hapus</button></div>
+    <div class="admin-app-form-grid">
+      <div class="form-group"><label class="admin-app-label">Judul</label><input class="admin-app-input cms-contact-title" type="text" value="${escapeHtml(item.title || '')}"></div>
+      <div class="form-group"><label class="admin-app-label">Warna</label><input class="admin-app-input cms-contact-color" type="text" value="${escapeHtml(item.color || 'var(--rose)')}"></div>
+    </div>
+    <div class="form-group"><label class="admin-app-label">Detail</label><input class="admin-app-input cms-contact-detail" type="text" value="${escapeHtml(item.detail || '')}"></div>
+    <div class="form-group"><label class="admin-app-label">Subteks</label><input class="admin-app-input cms-contact-sub" type="text" value="${escapeHtml(item.sub || '')}"></div>
+    <div class="form-group"><label class="admin-app-label">SVG Path Icon</label><textarea class="admin-app-input cms-contact-icon" rows="2">${escapeHtml(item.icon || '')}</textarea></div>
+  </div>`;
+}
+
+function addAdminLandingContactRow(item = {}) {
+  document.getElementById('cmsContactItems')?.insertAdjacentHTML('beforeend', adminLandingContactCardHtml(item));
+}
+
+function addAdminLandingValueRow(item = {}) {
+  document.getElementById('cmsAboutValues')?.insertAdjacentHTML('beforeend', adminLandingFeatureCardHtml(item, 'cms-value', 'Nilai'));
+}
+
+function fillAdminLandingSectionFields(section, key) {
+  if (key === 'site') {
+    document.getElementById('cmsSiteName').value = section.name || '';
+    document.getElementById('cmsSiteTagline').value = section.tagline || '';
+    return;
+  }
+
+  if (key === 'hero') {
+    document.getElementById('cmsHeroBadge').value = section.badge || '';
+    document.getElementById('cmsHeroTitle').value = section.title || '';
+    document.getElementById('cmsHeroHighlight').value = section.title_highlight || '';
+    document.getElementById('cmsHeroSubtitle').value = section.subtitle || '';
+    document.getElementById('cmsHeroCtaPrimary').value = section.cta_primary || '';
+    document.getElementById('cmsHeroCtaSecondary').value = section.cta_secondary || '';
+    const heroStats = document.getElementById('cmsHeroStatsBody');
+    heroStats.innerHTML = (section.stats || []).map((stat) => adminLandingStatRowHtml(stat)).join('') || adminLandingStatRowHtml();
+    return;
+  }
+
+  if (['features', 'pricing', 'testimonials', 'contact'].includes(key)) {
+    document.querySelector(`.cms-section-badge[data-section="${key}"]`).value = section.badge || '';
+    document.querySelector(`.cms-section-title[data-section="${key}"]`).value = section.title || '';
+    document.querySelector(`.cms-section-subtitle[data-section="${key}"]`).value = section.subtitle || '';
+    const containerMap = {
+      features: ['cmsFeaturesItems', addAdminLandingFeatureRow],
+      pricing: ['cmsPricingItems', addAdminLandingPricingRow],
+      testimonials: ['cmsTestimonialsItems', addAdminLandingTestimonialRow],
+      contact: ['cmsContactItems', addAdminLandingContactRow],
+    };
+    const [containerId, addRow] = containerMap[key];
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    (section.items || []).forEach((item) => addRow(item));
+    if (!section.items?.length) addRow();
+    return;
+  }
+
+  if (key === 'about') {
+    document.getElementById('cmsAboutBadge').value = section.badge || '';
+    document.getElementById('cmsAboutTitle').value = section.title || '';
+    document.getElementById('cmsAboutTitleBreak').value = section.title_break || '';
+    document.getElementById('cmsAboutParagraphs').value = (section.paragraphs || []).join('\n\n');
+    const aboutStats = document.getElementById('cmsAboutStatsBody');
+    aboutStats.innerHTML = (section.stats || []).map((stat) => adminLandingStatRowHtml(stat)).join('') || adminLandingStatRowHtml();
+    const values = document.getElementById('cmsAboutValues');
+    values.innerHTML = '';
+    (section.values || []).forEach((item) => addAdminLandingValueRow(item));
+    if (!section.values?.length) addAdminLandingValueRow();
+    return;
+  }
+
+  if (key === 'footer') {
+    document.getElementById('cmsFooterDescription').value = section.description || '';
+    document.getElementById('cmsFooterCopyright').value = section.copyright || '';
+  }
+}
+
+function collectAdminLandingSectionPayload(key) {
+  if (key === 'site') {
+    return {
+      name: document.getElementById('cmsSiteName')?.value?.trim() || '',
+      tagline: document.getElementById('cmsSiteTagline')?.value?.trim() || '',
+    };
+  }
+
+  if (key === 'hero') {
+    return {
+      badge: document.getElementById('cmsHeroBadge')?.value?.trim() || '',
+      title: document.getElementById('cmsHeroTitle')?.value?.trim() || '',
+      title_highlight: document.getElementById('cmsHeroHighlight')?.value?.trim() || '',
+      subtitle: document.getElementById('cmsHeroSubtitle')?.value?.trim() || '',
+      cta_primary: document.getElementById('cmsHeroCtaPrimary')?.value?.trim() || '',
+      cta_secondary: document.getElementById('cmsHeroCtaSecondary')?.value?.trim() || '',
+      stats: collectAdminLandingStats('cmsHeroStatsBody'),
+    };
+  }
+
+  if (key === 'features') {
+    return {
+      badge: document.querySelector('.cms-section-badge[data-section="features"]')?.value?.trim() || '',
+      title: document.querySelector('.cms-section-title[data-section="features"]')?.value?.trim() || '',
+      subtitle: document.querySelector('.cms-section-subtitle[data-section="features"]')?.value?.trim() || '',
+      items: [...document.querySelectorAll('.admin-cms-feature-row')].map((row) => ({
+        title: row.querySelector('.cms-feature-title')?.value?.trim() || '',
+        desc: row.querySelector('.cms-feature-desc')?.value?.trim() || '',
+        icon: row.querySelector('.cms-feature-icon')?.value?.trim() || '',
+        color: row.querySelector('.cms-feature-color')?.value?.trim() || 'var(--accent-1)',
+      })),
+    };
+  }
+
+  if (key === 'pricing') {
+    return {
+      badge: document.querySelector('.cms-section-badge[data-section="pricing"]')?.value?.trim() || '',
+      title: document.querySelector('.cms-section-title[data-section="pricing"]')?.value?.trim() || '',
+      subtitle: document.querySelector('.cms-section-subtitle[data-section="pricing"]')?.value?.trim() || '',
+      items: [...document.querySelectorAll('.admin-cms-pricing-row')].map((row) => ({
+        name: row.querySelector('.cms-pricing-name')?.value?.trim() || '',
+        price: row.querySelector('.cms-pricing-price')?.value?.trim() || '',
+        period: row.querySelector('.cms-pricing-period')?.value?.trim() || '',
+        popular: !!row.querySelector('.cms-pricing-popular')?.checked,
+        features: (row.querySelector('.cms-pricing-features')?.value || '').split('\n').map((line) => line.trim()).filter(Boolean),
+      })),
+    };
+  }
+
+  if (key === 'testimonials') {
+    return {
+      badge: document.querySelector('.cms-section-badge[data-section="testimonials"]')?.value?.trim() || '',
+      title: document.querySelector('.cms-section-title[data-section="testimonials"]')?.value?.trim() || '',
+      subtitle: document.querySelector('.cms-section-subtitle[data-section="testimonials"]')?.value?.trim() || '',
+      items: [...document.querySelectorAll('.admin-cms-testimonial-row')].map((row) => ({
+        name: row.querySelector('.cms-testimonial-name')?.value?.trim() || '',
+        role: row.querySelector('.cms-testimonial-role')?.value?.trim() || '',
+        text: row.querySelector('.cms-testimonial-text')?.value?.trim() || '',
+        avatar: row.querySelector('.cms-testimonial-avatar')?.value?.trim() || '',
+      })),
+    };
+  }
+
+  if (key === 'about') {
+    return {
+      badge: document.getElementById('cmsAboutBadge')?.value?.trim() || '',
+      title: document.getElementById('cmsAboutTitle')?.value?.trim() || '',
+      title_break: document.getElementById('cmsAboutTitleBreak')?.value?.trim() || '',
+      paragraphs: (document.getElementById('cmsAboutParagraphs')?.value || '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean),
+      stats: collectAdminLandingStats('cmsAboutStatsBody'),
+      values: [...document.querySelectorAll('.admin-cms-value-row')].map((row) => ({
+        title: row.querySelector('.cms-value-title')?.value?.trim() || '',
+        desc: row.querySelector('.cms-value-desc')?.value?.trim() || '',
+        icon: row.querySelector('.cms-value-icon')?.value?.trim() || '',
+        color: row.querySelector('.cms-value-color')?.value?.trim() || 'var(--amber)',
+      })),
+    };
+  }
+
+  if (key === 'contact') {
+    return {
+      badge: document.querySelector('.cms-section-badge[data-section="contact"]')?.value?.trim() || '',
+      title: document.querySelector('.cms-section-title[data-section="contact"]')?.value?.trim() || '',
+      subtitle: document.querySelector('.cms-section-subtitle[data-section="contact"]')?.value?.trim() || '',
+      items: [...document.querySelectorAll('.admin-cms-contact-row')].map((row) => ({
+        title: row.querySelector('.cms-contact-title')?.value?.trim() || '',
+        detail: row.querySelector('.cms-contact-detail')?.value?.trim() || '',
+        sub: row.querySelector('.cms-contact-sub')?.value?.trim() || '',
+        icon: row.querySelector('.cms-contact-icon')?.value?.trim() || '',
+        color: row.querySelector('.cms-contact-color')?.value?.trim() || 'var(--rose)',
+      })),
+    };
+  }
+
+  if (key === 'footer') {
+    return {
+      description: document.getElementById('cmsFooterDescription')?.value?.trim() || '',
+      copyright: document.getElementById('cmsFooterCopyright')?.value?.trim() || '',
+    };
+  }
+
+  return {};
+}
+
+function renderAdminLandingCmsForms() {
+  Object.entries(adminLandingCmsCache).forEach(([key, section]) => fillAdminLandingSectionFields(section, key));
+}
+
+async function refreshAdminLandingCms() {
+  try {
+    const response = await fetch(adminLandingContentUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      showAdminLandingAlert(data.message || 'Gagal memuat CMS halaman utama.', 'error');
+      return;
+    }
+    adminLandingCmsCache = data.sections || {};
+    renderAdminLandingCmsForms();
+  } catch {
+    showAdminLandingAlert('Gagal memuat CMS halaman utama.', 'error');
+  }
+}
+
+async function persistLandingSection(key, payload) {
+  try {
+    const response = await fetch(`${adminLandingContentUrl}/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ payload }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const firstError = data.errors ? Object.values(data.errors).flat()[0] : null;
+      return { ok: false, error: firstError || data.message || 'Gagal menyimpan konten.' };
+    }
+    return { ok: true, section: data.section || payload, message: data.message || 'Konten berhasil disimpan.' };
+  } catch {
+    return { ok: false, error: 'Gagal menyimpan konten.' };
+  }
+}
+
+async function saveAdminLandingSection(key) {
+  const payload = collectAdminLandingSectionPayload(key);
+  const result = await persistLandingSection(key, payload);
+  if (!result.ok) {
+    showAdminLandingAlert(result.error, 'error');
+    return;
+  }
+  adminLandingCmsCache[key] = result.section;
+  showAdminLandingAlert(result.message);
+}
+
+function showAdminMailSettingsAlert(message, type = 'success') {
+  const el = document.getElementById('adminMailSettingsAlert');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.toggle('is-error', type === 'error');
+  el.classList.toggle('is-success', type !== 'error');
+}
+
+function switchAdminSettingsTab(tab, btn = null) {
+  adminSettingsActiveTab = tab;
+
+  document.querySelectorAll('[data-admin-settings-tab]').forEach((el) => {
+    el.classList.toggle('active', btn ? el === btn : el.dataset.adminSettingsTab === tab);
+  });
+
+  const panels = {
+    email: document.getElementById('adminSettingsEmailPanel'),
+    commission: document.getElementById('adminSettingsCommissionPanel'),
+    license: document.getElementById('adminSettingsLicensePanel'),
+  };
+
+  Object.entries(panels).forEach(([key, panel]) => {
+    if (panel) panel.hidden = key !== tab;
+  });
+
+  if (tab === 'email') refreshAdminMailSettings();
+}
+
+function toggleMailSettingsSmtpFields() {
+  const mailer = document.getElementById('mailSettingsMailer')?.value;
+  const smtpInputs = document.querySelectorAll('.mail-settings-smtp-input');
+  const smtpSection = document.getElementById('mailSettingsSmtpFields');
+  const driverHint = document.getElementById('mailSettingsDriverHint');
+  const isSmtp = mailer === 'smtp';
+
+  smtpInputs.forEach((el) => {
+    el.disabled = !isSmtp;
+    el.closest('.form-group')?.classList.toggle('is-disabled', !isSmtp);
+  });
+
+  if (smtpSection) smtpSection.classList.toggle('is-muted', !isSmtp);
+
+  if (driverHint) {
+    driverHint.textContent = isSmtp
+      ? 'Mode SMTP: email dikirim lewat server yang dikonfigurasi di bawah.'
+      : mailer === 'sendmail'
+        ? 'Mode Sendmail: menggunakan sendmail server lokal.'
+        : 'Mode development: email tidak dikirim, hanya dicatat di storage/logs/laravel.log.';
+  }
+}
+
+function applyGmailMailPreset() {
+  document.getElementById('mailSettingsMailer').value = 'smtp';
+  document.getElementById('mailSettingsHost').value = 'smtp.gmail.com';
+  document.getElementById('mailSettingsPort').value = 587;
+  document.getElementById('mailSettingsEncryption').value = 'tls';
+
+  const username = document.getElementById('mailSettingsFromAddress')?.value?.trim()
+    || document.getElementById('mailSettingsUsername')?.value?.trim();
+  if (username) {
+    document.getElementById('mailSettingsUsername').value = username;
+    document.getElementById('mailSettingsFromAddress').value = username;
+  }
+
+  toggleMailSettingsSmtpFields();
+  showAdminMailSettingsAlert('Preset Gmail diterapkan. Lengkapi Username, App Password, Email Pengirim, dan URL Aplikasi lalu Simpan.', 'success');
+}
+
+function fillAdminMailSettingsForm(settings = {}) {
+  document.getElementById('mailSettingsMailer').value = settings.mailer || 'log';
+  document.getElementById('mailSettingsAppUrl').value = settings.app_url || '';
+  document.getElementById('mailSettingsHost').value = settings.host || '';
+  document.getElementById('mailSettingsPort').value = settings.port ?? 587;
+  document.getElementById('mailSettingsEncryption').value = settings.encryption || '';
+  document.getElementById('mailSettingsUsername').value = settings.username || '';
+  document.getElementById('mailSettingsPassword').value = '';
+  document.getElementById('mailSettingsFromAddress').value = settings.from_address || '';
+  document.getElementById('mailSettingsFromName').value = settings.from_name || '';
+  document.getElementById('mailSettingsVerificationExpire').value = settings.verification_expire ?? 60;
+
+  const hint = document.getElementById('mailSettingsPasswordHint');
+  if (hint) {
+    hint.textContent = settings.password_set ? '(sudah tersimpan — kosongkan jika tidak diubah)' : '';
+  }
+
+  const source = document.getElementById('adminMailSettingsSource');
+  if (source) {
+    source.textContent = settings.source === 'database' ? 'Dari database' : 'Dari .env default';
+    source.className = `badge ${settings.source === 'database' ? 'badge-active' : 'badge-trial'}`;
+  }
+
+  toggleMailSettingsSmtpFields();
+}
+
+async function refreshAdminMailSettings() {
+  const root = document.getElementById('admin-settings');
+  if (!root) return;
+
+  try {
+    const response = await fetch(adminMailSettingsUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      showAdminMailSettingsAlert(data.message || 'Gagal memuat pengaturan email.', 'error');
+      return;
+    }
+    fillAdminMailSettingsForm(data.settings || {});
+  } catch {
+    showAdminMailSettingsAlert('Gagal memuat pengaturan email.', 'error');
+  }
+}
+
+function collectAdminMailSettingsPayload() {
+  return {
+    mailer: document.getElementById('mailSettingsMailer')?.value || 'log',
+    host: document.getElementById('mailSettingsHost')?.value?.trim() || '',
+    port: Number(document.getElementById('mailSettingsPort')?.value || 587),
+    encryption: document.getElementById('mailSettingsEncryption')?.value || '',
+    username: document.getElementById('mailSettingsUsername')?.value?.trim() || '',
+    password: document.getElementById('mailSettingsPassword')?.value || '',
+    from_address: document.getElementById('mailSettingsFromAddress')?.value?.trim() || '',
+    from_name: document.getElementById('mailSettingsFromName')?.value?.trim() || '',
+    app_url: document.getElementById('mailSettingsAppUrl')?.value?.trim() || '',
+    verification_expire: Number(document.getElementById('mailSettingsVerificationExpire')?.value || 60),
+  };
+}
+
+async function saveAdminMailSettings() {
+  const btn = document.getElementById('mailSettingsSaveBtn');
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  btn.disabled = true;
+  btn.textContent = 'Menyimpan...';
+
+  try {
+    const response = await fetch(adminMailSettingsUrl, {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(collectAdminMailSettingsPayload()),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const firstError = data.errors ? Object.values(data.errors).flat()[0] : null;
+      showAdminMailSettingsAlert(firstError || data.message || 'Gagal menyimpan pengaturan email.', 'error');
+      return;
+    }
+    fillAdminMailSettingsForm(data.settings || {});
+    showAdminMailSettingsAlert(data.message || 'Pengaturan email berhasil disimpan.');
+  } catch {
+    showAdminMailSettingsAlert('Gagal menyimpan pengaturan email.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Simpan Pengaturan Email';
+  }
+}
+
+async function sendAdminMailSettingsTest() {
+  const btn = document.getElementById('mailSettingsTestBtn');
+  const email = document.getElementById('mailSettingsTestEmail')?.value?.trim();
+  if (!email) {
+    showAdminMailSettingsAlert('Masukkan email tujuan tes.', 'error');
+    return;
+  }
+
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  btn.disabled = true;
+  btn.textContent = 'Mengirim...';
+
+  try {
+    const response = await fetch(adminMailSettingsTestUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json();
+    showAdminMailSettingsAlert(
+      data.message || (response.ok ? 'Email tes terkirim.' : 'Gagal mengirim email tes.'),
+      response.ok ? 'success' : 'error',
+    );
+  } catch {
+    showAdminMailSettingsAlert('Gagal mengirim email tes.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Kirim Email Tes';
+  }
+}
+
 // Copy ref link
 function copyRefLink() {
   const text = document.getElementById('refLinkText').textContent;
@@ -2164,22 +3495,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const refEl = document.getElementById('refLinkText');
   if (refEl && referralUrl) refEl.textContent = referralUrl;
 
-  renderFeatures();
-  renderPricing();
-  renderTestimonials();
-  renderAboutValues();
-  renderContacts();
-  createParticles();
+  if (document.getElementById('featuresGrid')) {
+    renderFeatures();
+    renderPricing();
+    renderTestimonials();
+    renderAboutValues();
+    renderContacts();
+    createParticles();
 
-  // Initial reveal for above-fold
-  setTimeout(revealOnScroll, 100);
-  setTimeout(animateCounters, 600);
+    setTimeout(revealOnScroll, 100);
+    setTimeout(animateCounters, 600);
 
-  window.addEventListener('scroll', () => {
-    updateNav();
-    revealOnScroll();
-    animateCounters();
-  }, { passive: true });
+    window.addEventListener('scroll', () => {
+      updateNav();
+      revealOnScroll();
+      animateCounters();
+    }, { passive: true });
+  }
 
   initAppState();
 });

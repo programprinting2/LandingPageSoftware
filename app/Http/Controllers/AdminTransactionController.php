@@ -23,7 +23,7 @@ class AdminTransactionController extends Controller
                 'client.user:id,name,email',
                 'application:id,name,slug',
                 'package:id,name',
-                'paymentOrder',
+                'paymentOrder.affiliate.user:id,name',
             ])
             ->latest('paid_at')
             ->latest('id')
@@ -51,6 +51,7 @@ class AdminTransactionController extends Controller
             : ($transaction->paid_at ? Carbon::parse($transaction->paid_at) : null);
 
         $gateway = $this->resolveGatewayDetails($transaction);
+        $referral = $this->resolveReferralDetails($transaction);
 
         return [
             'id' => $transaction->id,
@@ -72,9 +73,39 @@ class AdminTransactionController extends Controller
             'status_label' => $this->statusLabel($transaction->status),
             'paid_at' => $paidAt?->format('d M Y H:i'),
             'paid_at_date' => $paidAt?->format('d M Y'),
+            'referral_code' => $referral['code'],
+            'affiliate_name' => $referral['name'],
+            'referral_label' => $referral['label'],
             'gateway' => $gateway,
             'gateway_summary' => $gateway['summary'] ?? [],
             'has_gateway_details' => (bool) ($gateway['has_details'] ?? false),
+        ];
+    }
+
+    private function resolveReferralDetails(Transaction $transaction): array
+    {
+        $code = $transaction->paymentOrder?->referral_code
+            ?? data_get($transaction->meta, 'referral_code');
+
+        $name = null;
+        if ($transaction->paymentOrder?->affiliate) {
+            $name = $transaction->paymentOrder->affiliate->user?->name
+                ?? $transaction->paymentOrder->affiliate->code;
+        }
+
+        if (! $name && $code) {
+            $name = data_get($transaction->meta, 'affiliate_code');
+        }
+
+        $label = '—';
+        if ($code) {
+            $label = $name ? "{$code} · {$name}" : $code;
+        }
+
+        return [
+            'code' => $code ?: null,
+            'name' => $name ?: null,
+            'label' => $label,
         ];
     }
 
@@ -131,6 +162,8 @@ class AdminTransactionController extends Controller
             ['label' => 'Dibayar', 'value' => $this->formatIsoLabel($raw['paid_at'] ?? null)],
             ['label' => 'Sumber Konfirmasi', 'value' => $fulfillmentLabel],
             ['label' => 'Simulasi', 'value' => ! empty($raw['simulated']) ? 'Ya' : 'Tidak'],
+            ['label' => 'Kode Referral', 'value' => $raw['referral_code'] ?? '—'],
+            ['label' => 'Affiliate', 'value' => $raw['affiliate_name'] ?? '—'],
         ];
 
         return [

@@ -26,6 +26,9 @@ class StoreAdminApplicationRequest extends FormRequest
             'packages.*.devices_quota' => ['required', 'integer', 'min:1', 'max:999'],
             'packages.*.duration_days' => ['required', 'integer', 'min:0', 'max:36500'],
             'packages.*.price' => ['required', 'numeric', 'min:0'],
+            'packages.*.discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'packages.*.affiliate_commission_fixed' => ['nullable', 'numeric', 'min:0'],
+            'packages.*.affiliate_commission_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'packages.*.sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
         ];
     }

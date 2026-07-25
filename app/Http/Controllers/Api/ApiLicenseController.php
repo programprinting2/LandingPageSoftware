@@ -79,8 +79,9 @@ class ApiLicenseController extends Controller
         $data = $request->json()->all();
         $packageId = (int) ($data['package_id'] ?? 0);
         $applicationSlug = $this->applicationSlug($request, $data);
+        $referralCode = isset($data['referral_code']) ? (string) $data['referral_code'] : null;
 
-        $result = $this->licenseService->upgradePackage($user, $packageId, $applicationSlug);
+        $result = $this->licenseService->upgradePackage($user, $packageId, $applicationSlug, $referralCode);
         $code = ($result['status'] ?? '') === 'success' ? 200 : 400;
 
         return response()->json($result, $code);

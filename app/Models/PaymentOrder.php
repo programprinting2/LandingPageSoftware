@@ -13,6 +13,8 @@ class PaymentOrder extends Model
         'client_id',
         'application_id',
         'application_package_id',
+        'affiliate_id',
+        'referral_code',
         'transaction_id',
         'type',
         'amount',
@@ -54,6 +56,11 @@ class PaymentOrder extends Model
     public function package(): BelongsTo
     {
         return $this->belongsTo(ApplicationPackage::class, 'application_package_id');
+    }
+
+    public function affiliate(): BelongsTo
+    {
+        return $this->belongsTo(Affiliate::class);
     }
 
     public function transaction(): BelongsTo

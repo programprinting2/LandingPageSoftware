@@ -13,6 +13,11 @@
 
     <div id="authAlert" style="display:none; margin-bottom:14px; padding:12px 14px; border-radius:10px; font-size:13px;"></div>
 
+    <div id="verificationResendWrap" hidden style="margin-bottom:14px; padding:12px 14px; border-radius:10px; background:rgba(245,166,35,0.08); border:1px solid rgba(245,166,35,0.2);">
+      <p style="font-size:12px; color:var(--text-2); margin-bottom:8px;">Belum menerima email? Kirim ulang link ke <strong id="verificationResendEmail" style="color:var(--text-1);"></strong></p>
+      <button type="button" class="btn btn-secondary btn-full" id="verificationResendBtn" onclick="resendVerificationEmail()" style="padding:8px 14px; font-size:12px;">Kirim Ulang Link Verifikasi</button>
+    </div>
+
     <!-- LOGIN FORM -->
     <form id="loginForm" onsubmit="submitClientLogin(event)">
       <div class="role-selector">
