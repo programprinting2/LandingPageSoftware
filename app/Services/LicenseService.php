@@ -490,10 +490,16 @@ class LicenseService
             ->values()
             ->all();
 
+        $purchaseStatus = (string) ($owned->pivot->status ?? '');
+        $licenseType = $package?->name;
+        if (! $licenseType && in_array($purchaseStatus, ['active', 'trial'], true)) {
+            $licenseType = $purchaseStatus === 'trial' ? 'Trial' : 'Active';
+        }
+
         return [
-            'license_type' => $package?->name,
+            'license_type' => $licenseType,
             'package' => $package ? $this->packagePayload($package) : null,
-            'purchase_status' => $owned->pivot->status,
+            'purchase_status' => $purchaseStatus,
             'purchased_at' => $purchasedAt?->toIso8601String(),
             'expires_at' => $expiresAt?->toIso8601String(),
             'expires_at_label' => $expiresAt ? $expiresAt->format('d M Y') : null,

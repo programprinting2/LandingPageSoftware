@@ -27,7 +27,7 @@ class ClientAuthService
                 'user_id' => $user->id,
                 'company_name' => $data['company_name'],
                 'whatsapp' => $data['whatsapp'],
-                'status' => 'trial',
+                'status' => 'active',
                 'devices_max' => config('spotcolor.devices_max', 3),
             ]);
 
@@ -61,6 +61,10 @@ class ClientAuthService
             return null;
         }
 
+        if (! $this->isClientActive($user)) {
+            return null;
+        }
+
         return $user;
     }
 
@@ -77,6 +81,34 @@ class ClientAuthService
         }
 
         return $user->load('client');
+    }
+
+    public function findInactiveClientByCredentials(string $email, string $password): ?User
+    {
+        $user = User::where('email', strtolower(trim($email)))->first();
+
+        if (! $user || ! Hash::check($password, $user->password)) {
+            return null;
+        }
+
+        if ($user->role !== 'client' || ! $user->hasVerifiedEmail()) {
+            return null;
+        }
+
+        $user->load('client');
+
+        if (! $user->client || $this->isClientActive($user)) {
+            return null;
+        }
+
+        return $user;
+    }
+
+    public function isClientActive(User $user): bool
+    {
+        $user->loadMissing('client');
+
+        return $user->client && (string) $user->client->status === 'active';
     }
 
     public function createApiToken(User $user): array
@@ -122,6 +154,10 @@ class ClientAuthService
         $user = $record->user;
 
         if (! $user || $user->role !== 'client' || ! $user->client) {
+            return null;
+        }
+
+        if (! $this->isClientActive($user)) {
             return null;
         }
 

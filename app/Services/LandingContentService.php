@@ -9,11 +9,11 @@ class LandingContentService
     public const SECTIONS = [
         'site',
         'hero',
+        'video',
+        'workflow',
         'features',
         'pricing',
-        'testimonials',
-        'about',
-        'contact',
+        'faq',
         'footer',
     ];
 
@@ -25,60 +25,44 @@ class LandingContentService
                 'tagline' => (string) config('softsale.tagline'),
             ],
             'hero' => [
-                'badge' => 'Solusi Bisnis Digital Terdepan',
-                'title' => 'Kelola Bisnis Anda',
-                'title_highlight' => 'Tanpa Batas',
-                'subtitle' => 'Platform manajemen bisnis all-in-one yang membantu Anda mengelola operasional, keuangan, dan tim dari satu dashboard terpadu.',
-                'cta_primary' => 'Mulai Gratis 14 Hari',
-                'cta_secondary' => 'Lihat Demo',
-                'stats' => [
-                    ['value' => '500', 'label' => 'Klien Aktif', 'animate' => true],
-                    ['value' => '99.9%', 'label' => 'Uptime', 'animate' => false],
-                    ['value' => '24/7', 'label' => 'Support', 'animate' => false],
+                'title' => 'Solusi',
+                'title_highlight' => 'SATSET',
+                'title_suffix' => 'cetak DTF! Proses PNG siap cetak hanya dengan',
+                'title_highlight_2' => '1x klik',
+                'subtitle' => 'Tinggalkan proses bikin spot color & white mask manual.',
+                'cta_primary' => 'Coba Gratis',
+                'cta_secondary' => 'Lihat Video',
+            ],
+            'video' => [
+                'url' => '',
+            ],
+            'workflow' => [
+                'title' => 'Alur Kerja Mudah dan Simpel',
+                'steps' => [
+                    ['title' => 'Scan & Input File', 'desc' => 'Masukkan file PNG hasil layout atau nesting Anda.'],
+                    ['title' => 'Atur Parameter', 'desc' => 'Atur contract sesuai kebutuhan cetak dan mesin (opsional).'],
+                    ['title' => 'Proses', 'desc' => 'Klik proses dan tunggu file PDF selesai di export.'],
+                    ['title' => 'Cetak', 'desc' => 'Drag and drop file PDF siap cetak ke software mesin cetak Anda.'],
                 ],
             ],
             'features' => [
-                'badge' => 'Fitur Unggulan',
-                'title' => 'Semua yang bisnis Anda butuhkan',
-                'subtitle' => 'Dirancang modular agar fleksibel mengikuti skala bisnis Anda, dari UMKM hingga korporasi.',
+                'title' => 'Dirancang untuk Produktivitas Cetak',
                 'items' => config('softsale.features', []),
             ],
             'pricing' => [
-                'badge' => 'Harga Transparan',
-                'title' => 'Pilih paket yang tepat',
-                'subtitle' => 'Tanpa biaya tersembunyi. Upgrade atau downgrade kapan saja.',
+                'badge' => 'Harga',
+                'title' => 'Pilih Paket yang Tepat',
+                'subtitle' => 'Mulai gratis, upgrade kapan saja sesuai kebutuhan produksi Anda.',
                 'items' => config('softsale.plans', []),
             ],
-            'testimonials' => [
-                'badge' => 'Testimonial',
-                'title' => 'Dipercaya ratusan bisnis',
-                'subtitle' => 'Dengarkan langsung dari mereka yang sudah merasakan manfaatnya.',
-                'items' => config('softsale.testimonials', []),
-            ],
-            'about' => [
-                'badge' => 'Tentang Kami',
-                'title' => 'Dibangun oleh praktisi,',
-                'title_break' => 'untuk praktisi bisnis',
-                'paragraphs' => [
-                    'SoftSale lahir dari pengalaman nyata mengelola operasional bisnis digital di Indonesia. Kami memahami tantangan yang dihadapi UMKM hingga korporasi — mulai dari pencatatan manual yang rawan error, hingga kebutuhan akan sistem terintegrasi.',
-                    'Tim kami terdiri dari engineer dan konsultan bisnis berpengalaman yang berkomitmen menghadirkan solusi teknologi berkualitas enterprise dengan harga terjangkau.',
-                ],
-                'stats' => [
-                    ['value' => '5', 'label' => 'Tahun Pengalaman', 'animate' => true],
-                    ['value' => '20', 'label' => 'Tim Profesional', 'animate' => true],
-                    ['value' => '99%', 'label' => 'Kepuasan Client', 'animate' => false],
-                ],
-                'values' => config('softsale.about_values', []),
-            ],
-            'contact' => [
-                'badge' => 'Kontak',
-                'title' => 'Hubungi Kami',
-                'subtitle' => 'Punya pertanyaan atau butuh konsultasi? Tim kami siap membantu Anda.',
-                'items' => config('softsale.contacts', []),
+            'faq' => [
+                'title' => 'Pertanyaan Umum',
+                'subtitle' => 'Jawaban untuk pertanyaan yang sering ditanyakan.',
+                'items' => config('softsale.faq', []),
             ],
             'footer' => [
-                'description' => 'Platform manajemen bisnis all-in-one untuk era digital. Dibuat dengan teknologi terdepan untuk bisnis Indonesia.',
-                'copyright' => '© '.date('Y').' SoftSale. All rights reserved.',
+                'description' => 'Software otomatis spot color & white mask untuk printing DTF. Hemat waktu, tingkatkan produktivitas.',
+                'copyright' => '© '.date('Y').' Quick Spot Color. All rights reserved.',
             ],
         ];
     }
@@ -136,37 +120,11 @@ class LandingContentService
         return [
             'site' => $cms['site'],
             'hero' => $cms['hero'],
-            'features' => $cms['features']['items'] ?? [],
-            'featuresSection' => [
-                'badge' => $cms['features']['badge'] ?? '',
-                'title' => $cms['features']['title'] ?? '',
-                'subtitle' => $cms['features']['subtitle'] ?? '',
-            ],
             'plans' => $cms['pricing']['items'] ?? [],
             'pricingSection' => [
                 'badge' => $cms['pricing']['badge'] ?? '',
                 'title' => $cms['pricing']['title'] ?? '',
                 'subtitle' => $cms['pricing']['subtitle'] ?? '',
-            ],
-            'testimonials' => $cms['testimonials']['items'] ?? [],
-            'testimonialsSection' => [
-                'badge' => $cms['testimonials']['badge'] ?? '',
-                'title' => $cms['testimonials']['title'] ?? '',
-                'subtitle' => $cms['testimonials']['subtitle'] ?? '',
-            ],
-            'aboutValues' => $cms['about']['values'] ?? [],
-            'aboutSection' => [
-                'badge' => $cms['about']['badge'] ?? '',
-                'title' => $cms['about']['title'] ?? '',
-                'title_break' => $cms['about']['title_break'] ?? '',
-                'paragraphs' => $cms['about']['paragraphs'] ?? [],
-                'stats' => $cms['about']['stats'] ?? [],
-            ],
-            'contacts' => $cms['contact']['items'] ?? [],
-            'contactSection' => [
-                'badge' => $cms['contact']['badge'] ?? '',
-                'title' => $cms['contact']['title'] ?? '',
-                'subtitle' => $cms['contact']['subtitle'] ?? '',
             ],
             'footer' => $cms['footer'],
         ];

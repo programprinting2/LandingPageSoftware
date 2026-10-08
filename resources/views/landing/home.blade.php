@@ -1,5 +1,9 @@
 @extends('layouts.softsale')
 
+@push('styles')
+    <link rel="stylesheet" href="{{ asset('css/landing.css') }}">
+@endpush
+
 @section('content')
     @include('landing.index')
     @include('shared.components.auth-modal')

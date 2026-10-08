@@ -1,9 +1,5 @@
 ﻿const {
-  features: FEATURES = [],
   plans: PLANS = [],
-  testimonials: TESTIMONIALS = [],
-  aboutValues: ABOUT_VALUES = [],
-  contacts: CONTACTS = [],
   appMode = 'landing',
   landingUrl = '/',
   adminDashboardUrl = '/admin',
@@ -26,6 +22,7 @@
   adminTransactionsUrl = '/api/admin/transactions',
   adminPaymentOrdersUrl = '/api/admin/payment-orders',
   adminLandingContentUrl = '/api/admin/landing-content',
+  adminLandingImageUploadUrl = '/api/admin/landing-content/upload-image',
   adminMailSettingsUrl = '/api/admin/mail-settings',
   adminMailSettingsTestUrl = '/api/admin/mail-settings/test',
 } = window.SOFTSALE_DATA || {};
@@ -52,26 +49,10 @@ function svgIcon(paths, size = 20, color = 'currentColor') {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 }
 const checkSVG = svgIcon('<path d="M20 6L9 17l-5-5"/>', 15, 'var(--green)');
-const starSVG = svgIcon('<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>', 14, 'var(--amber)');
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // RENDER SECTIONS
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-function renderFeatures() {
-  const grid = document.getElementById('featuresGrid');
-  if (!grid) return;
-  const items = window.SOFTSALE_DATA?.features ?? FEATURES;
-  grid.innerHTML = items.map((f, i) => `
-    <div class="glass feature-card reveal reveal-delay-${i % 3 + 1}">
-      <div class="feature-icon" style="background:${f.color}12;">
-        ${svgIcon(f.icon, 22, f.color)}
-      </div>
-      <h3>${f.title}</h3>
-      <p>${f.desc}</p>
-    </div>
-  `).join('');
-}
-
 function renderPricing() {
   const grid = document.getElementById('pricingGrid');
   if (!grid) return;
@@ -93,69 +74,43 @@ function renderPricing() {
   `).join('');
 }
 
-function renderTestimonials() {
-  const grid = document.getElementById('testiGrid');
-  if (!grid) return;
-  const items = window.SOFTSALE_DATA?.testimonials ?? TESTIMONIALS;
-  grid.innerHTML = items.map((t, i) => `
-    <div class="glass testi-card reveal reveal-delay-${i + 1}">
-      <div class="testi-stars">${Array(5).fill(starSVG).join('')}</div>
-      <p class="testi-text">"${t.text}"</p>
-      <div class="testi-author">
-        <div class="testi-avatar">${t.avatar}</div>
-        <div>
-          <div class="testi-name">${t.name}</div>
-          <div class="testi-role">${t.role}</div>
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderAboutValues() {
-  const grid = document.getElementById('aboutValues');
-  if (!grid) return;
-  const items = window.SOFTSALE_DATA?.aboutValues ?? ABOUT_VALUES;
-  grid.innerHTML = items.map((v, i) => `
-    <div class="glass about-val reveal reveal-delay-${i + 1}">
-      <div class="about-val-icon" style="background:${v.color}12;">
-        ${svgIcon(v.icon, 18, v.color)}
-      </div>
-      <h4>${v.title}</h4>
-      <p>${v.desc}</p>
-    </div>
-  `).join('');
-}
-
-function renderContacts() {
-  const grid = document.getElementById('contactGrid');
-  if (!grid) return;
-  const items = window.SOFTSALE_DATA?.contacts ?? CONTACTS;
-  grid.innerHTML = items.map((c, i) => `
-    <div class="glass contact-card reveal reveal-delay-${i + 1}">
-      <div class="contact-icon" style="background:${c.color}12;">
-        ${svgIcon(c.icon, 22, c.color)}
-      </div>
-      <h4>${c.title}</h4>
-      <div class="contact-detail" style="color:var(--accent-1);">${c.detail}</div>
-      <div class="contact-sub">${c.sub}</div>
-    </div>
-  `).join('');
-}
-
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // SMOOTH SCROLL
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+function toggleFaq(btn) {
+  const item = btn.closest('.faq-item');
+  if (!item) return;
+  const isOpen = item.classList.contains('open');
+  document.querySelectorAll('.faq-item.open').forEach(el => {
+    el.classList.remove('open');
+    el.querySelector('.faq-question')?.setAttribute('aria-expanded', 'false');
+  });
+  if (!isOpen) {
+    item.classList.add('open');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+}
+
 function scrollToSection(id) {
   const el = document.getElementById(id);
   if (!el) return;
+
+  if (id === 'video') {
+    const video = el.querySelector('.video-wrapper') || el;
+    const navHeight = document.getElementById('navbar')?.offsetHeight || 72;
+    const offset = 100;
+    const top = video.getBoundingClientRect().top + window.scrollY - navHeight - offset;
+    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    return;
+  }
+
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // NAV SCROLL EFFECT + ACTIVE LINK
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-const sectionIds = ['fitur', 'harga', 'tentang', 'kontak'];
+const sectionIds = ['cara-kerja', 'fitur', 'harga', 'faq'];
 
 function updateNav() {
   const nav = document.getElementById('navbar');
@@ -185,49 +140,6 @@ function revealOnScroll() {
   els.forEach(el => {
     if (el.getBoundingClientRect().top < trigger) el.classList.add('visible');
   });
-}
-
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// COUNTER ANIMATION
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-let counterDone = {};
-function animateCounters() {
-  document.querySelectorAll('[data-count]').forEach(el => {
-    if (counterDone[el.dataset.count + el.textContent]) return;
-    if (el.getBoundingClientRect().top > window.innerHeight) return;
-    counterDone[el.dataset.count + el.textContent] = true;
-    const target = parseInt(el.dataset.count);
-    let current = 0;
-    const step = Math.max(1, Math.floor(target / 60));
-    const timer = setInterval(() => {
-      current += step;
-      if (current >= target) { el.textContent = target + '+'; clearInterval(timer); }
-      else el.textContent = current + '+';
-    }, 20);
-  });
-}
-
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// HERO PARTICLES
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-function createParticles() {
-  const container = document.getElementById('particles');
-  if (!container) return;
-  for (let i = 0; i < 18; i++) {
-    const p = document.createElement('div');
-    p.className = 'particle';
-    const size = Math.random() * 3 + 1.5;
-    const colors = ['rgba(56,126,245,0.5)', 'rgba(6,191,212,0.4)', 'rgba(167,139,250,0.35)'];
-    Object.assign(p.style, {
-      width: size + 'px', height: size + 'px',
-      left: Math.random() * 100 + '%',
-      top: (60 + Math.random() * 40) + '%',
-      background: colors[Math.floor(Math.random() * colors.length)],
-      animationDuration: (6 + Math.random() * 10) + 's',
-      animationDelay: (Math.random() * 8) + 's',
-    });
-    container.appendChild(p);
-  }
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -1006,12 +918,14 @@ function switchDashPage(portal, page, btn) {
   applyDashboardRoute(portal, page);
 }
 
+function adminClientStatusLabel(status) {
+  return status === 'inactive' ? 'Nonaktif' : 'Aktif';
+}
+
 function adminClientStatusBadge(status) {
   const map = {
     active: 'badge-active',
-    trial: 'badge-trial',
-    expired: 'badge-expired',
-    pending: 'badge-pending',
+    inactive: 'badge-expired',
   };
   return map[status] || 'badge-pending';
 }
@@ -1034,7 +948,7 @@ function renderAdminClientsRows(clients) {
 
   tbody.innerHTML = clients.map((client) => {
     const badge = adminClientStatusBadge(client.status);
-    const label = client.status ? client.status.charAt(0).toUpperCase() + client.status.slice(1) : 'Pending';
+    const label = adminClientStatusLabel(client.status);
     const apps = (client.applications || []).map((app) => formatAdminClientAppLabel(app)).join(', ') || '—';
     return `<tr data-client-id="${client.id}">
       <td class="td-bold">${escapeHtml(client.company_name || '—')}</td>
@@ -2299,7 +2213,7 @@ function addAdminApplicationPackageRow(pkg = {}) {
   row.className = 'admin-app-package-row';
   row.innerHTML = `
     <td><input class="admin-app-input pkg-name" type="text" placeholder="Trial / Basic / Pro" value="${escapeHtml(pkg.name || '')}"></td>
-    <td><input class="admin-app-input pkg-quota" type="number" min="1" max="999" value="${Number(pkg.devices_quota ?? 1)}" required></td>
+    <td class="pkg-quota-cell"><input class="admin-app-input pkg-quota" type="number" min="1" max="999" value="${Number(pkg.devices_quota ?? 1)}" required></td>
     <td>
       <div class="pkg-days-wrap${isUnlimited ? ' is-unlimited' : ''}">
         <input class="admin-app-input pkg-days" type="number" min="1" max="36500" value="${daysValue}" ${isUnlimited ? 'disabled' : ''}>
@@ -2728,9 +2642,10 @@ async function renderAdminClientApplicationOptions(selectedApps = []) {
       </div>`;
     }
 
-    const defaultPackageId = selectedPackageId || Number(packages[0]?.id);
+    // Jangan fallback ke paket pertama (biasanya trial) jika package_id belum tersimpan.
+    const defaultPackageId = selectedPackageId > 0 ? selectedPackageId : 0;
     const packageOptions = packages.map((pkg) => {
-      const checked = Number(pkg.id) === defaultPackageId ? 'checked' : '';
+      const checked = defaultPackageId > 0 && Number(pkg.id) === defaultPackageId ? 'checked' : '';
       return `<label class="admin-client-pkg-option">
         <input type="radio" name="adminClientPkg_${appId}" value="${pkg.id}" ${checked}>
         <span class="admin-client-pkg-body">
@@ -2959,6 +2874,15 @@ function showAdminLandingAlert(message, type = 'success') {
   el.classList.toggle('is-success', type !== 'error');
 }
 
+function showCmsAlert(message, type = 'success') {
+  const liveEditOpen = document.getElementById('liveEditOverlay') && !document.getElementById('liveEditOverlay').hidden;
+  if (liveEditOpen && typeof showLiveEditAlert === 'function') {
+    showLiveEditAlert(message, type);
+    return;
+  }
+  showAdminLandingAlert(message, type);
+}
+
 function switchAdminLandingPanel(panel, btn) {
   const root = document.getElementById('admin-landing-cms');
   if (!root) return;
@@ -2991,20 +2915,112 @@ function collectAdminLandingStats(tbodyId) {
   })).filter((item) => item.value && item.label);
 }
 
-function adminLandingFeatureCardHtml(item = {}, prefix = 'cms-feature', label = 'Fitur') {
-  return `<div class="admin-cms-card admin-cms-${prefix.replace('cms-', '')}-row">
-    <div class="admin-cms-card-head"><span>${label}</span><button type="button" class="admin-cms-remove" onclick="this.closest('.admin-cms-card').remove()">Hapus</button></div>
-    <div class="admin-app-form-grid">
-      <div class="form-group"><label class="admin-app-label">Judul</label><input class="admin-app-input ${prefix}-title" type="text" value="${escapeHtml(item.title || '')}"></div>
-      <div class="form-group"><label class="admin-app-label">Warna</label><input class="admin-app-input ${prefix}-color" type="text" value="${escapeHtml(item.color || 'var(--accent-1)')}"></div>
+function adminLandingFeatureImageFieldHtml(item = {}) {
+  const image = item.image || '';
+  const preview = image
+    ? `<img src="${escapeHtml(image)}" alt="Preview gambar fitur">`
+    : '<span class="cms-feature-image-empty">Belum ada gambar</span>';
+
+  return `<div class="form-group cms-feature-image-wrap">
+    <label class="admin-app-label">Gambar</label>
+    <input type="hidden" class="cms-feature-image" value="${escapeHtml(image)}">
+    <div class="cms-feature-image-preview">${preview}</div>
+    <div class="cms-feature-image-actions">
+      <label class="btn btn-secondary cms-feature-image-pick">
+        Pilih Gambar
+        <input type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml" hidden class="cms-feature-image-file" onchange="uploadAdminLandingFeatureImage(this)">
+      </label>
+      <button type="button" class="admin-cms-remove cms-feature-image-clear" onclick="clearAdminLandingFeatureImage(this)"${image ? '' : ' hidden'}>Hapus</button>
     </div>
-    <div class="form-group"><label class="admin-app-label">Deskripsi</label><textarea class="admin-app-input ${prefix}-desc" rows="2">${escapeHtml(item.desc || '')}</textarea></div>
-    <div class="form-group"><label class="admin-app-label">SVG Path Icon</label><textarea class="admin-app-input ${prefix}-icon" rows="2" placeholder="<path d=.../>">${escapeHtml(item.icon || '')}</textarea></div>
+    <p class="cms-feature-image-hint">JPG, PNG, WebP, GIF, SVG. Maks. 5 MB.</p>
+  </div>`;
+}
+
+function adminLandingFeatureCardHtml(item = {}) {
+  return `<div class="admin-cms-card admin-cms-feature-row">
+    <div class="admin-cms-card-head"><span>Fitur</span><button type="button" class="admin-cms-remove" onclick="this.closest('.admin-cms-card').remove()">Hapus</button></div>
+    <div class="form-group"><label class="admin-app-label">Judul</label><input class="admin-app-input cms-feature-title" type="text" value="${escapeHtml(item.title || '')}"></div>
+    <div class="form-group"><label class="admin-app-label">Deskripsi</label><textarea class="admin-app-input cms-feature-desc" rows="3">${escapeHtml(item.desc || '')}</textarea></div>
+    ${adminLandingFeatureImageFieldHtml(item)}
   </div>`;
 }
 
 function addAdminLandingFeatureRow(item = {}) {
-  document.getElementById('cmsFeaturesItems')?.insertAdjacentHTML('beforeend', adminLandingFeatureCardHtml(item, 'cms-feature', 'Fitur'));
+  document.getElementById('cmsFeaturesItems')?.insertAdjacentHTML('beforeend', adminLandingFeatureCardHtml(item));
+}
+
+function updateAdminLandingFeatureImagePreview(card, url) {
+  const preview = card.querySelector('.cms-feature-image-preview');
+  const hidden = card.querySelector('.cms-feature-image');
+  const clearBtn = card.querySelector('.cms-feature-image-clear');
+  if (!preview || !hidden) return;
+  hidden.value = url || '';
+  preview.innerHTML = url
+    ? `<img src="${escapeHtml(url)}" alt="Preview gambar fitur">`
+    : '<span class="cms-feature-image-empty">Belum ada gambar</span>';
+  if (clearBtn) clearBtn.hidden = !url;
+}
+
+async function uploadAdminLandingFeatureImage(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+
+  const card = input.closest('.admin-cms-feature-row');
+  const pickBtn = input.closest('.cms-feature-image-pick');
+
+  const formData = new FormData();
+  formData.append('image', file);
+
+  if (pickBtn) {
+    pickBtn.style.pointerEvents = 'none';
+    pickBtn.style.opacity = '0.7';
+  }
+
+  try {
+    const response = await fetch(adminLandingImageUploadUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      credentials: 'same-origin',
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const firstError = data.errors ? Object.values(data.errors).flat()[0] : null;
+      showCmsAlert(firstError || data.message || 'Gagal mengupload gambar.', 'error');
+      return;
+    }
+    updateAdminLandingFeatureImagePreview(card, data.url || '');
+  } catch {
+    showCmsAlert('Gagal mengupload gambar.', 'error');
+  } finally {
+    input.value = '';
+    if (pickBtn) {
+      pickBtn.style.pointerEvents = '';
+      pickBtn.style.opacity = '';
+    }
+  }
+}
+
+function clearAdminLandingFeatureImage(button) {
+  const card = button.closest('.admin-cms-feature-row');
+  const fileInput = card?.querySelector('.cms-feature-image-file');
+  if (fileInput) fileInput.value = '';
+  updateAdminLandingFeatureImagePreview(card, '');
+}
+
+function adminLandingFaqCardHtml(item = {}) {
+  return `<div class="admin-cms-card admin-cms-faq-row">
+    <div class="admin-cms-card-head"><span>FAQ</span><button type="button" class="admin-cms-remove" onclick="this.closest('.admin-cms-card').remove()">Hapus</button></div>
+    <div class="form-group"><label class="admin-app-label">Pertanyaan</label><input class="admin-app-input cms-faq-question" type="text" value="${escapeHtml(item.question || '')}"></div>
+    <div class="form-group"><label class="admin-app-label">Jawaban</label><textarea class="admin-app-input cms-faq-answer" rows="3">${escapeHtml(item.answer || '')}</textarea></div>
+  </div>`;
+}
+
+function addAdminLandingFaqRow(item = {}) {
+  document.getElementById('cmsFaqItems')?.insertAdjacentHTML('beforeend', adminLandingFaqCardHtml(item));
 }
 
 function adminLandingPricingCardHtml(item = {}) {
@@ -3025,43 +3041,6 @@ function addAdminLandingPricingRow(item = {}) {
   document.getElementById('cmsPricingItems')?.insertAdjacentHTML('beforeend', adminLandingPricingCardHtml(item));
 }
 
-function adminLandingTestimonialCardHtml(item = {}) {
-  return `<div class="admin-cms-card admin-cms-testimonial-row">
-    <div class="admin-cms-card-head"><span>Testimonial</span><button type="button" class="admin-cms-remove" onclick="this.closest('.admin-cms-card').remove()">Hapus</button></div>
-    <div class="admin-app-form-grid">
-      <div class="form-group"><label class="admin-app-label">Nama</label><input class="admin-app-input cms-testimonial-name" type="text" value="${escapeHtml(item.name || '')}"></div>
-      <div class="form-group"><label class="admin-app-label">Avatar (2 huruf)</label><input class="admin-app-input cms-testimonial-avatar" type="text" maxlength="4" value="${escapeHtml(item.avatar || '')}"></div>
-    </div>
-    <div class="form-group"><label class="admin-app-label">Role / Perusahaan</label><input class="admin-app-input cms-testimonial-role" type="text" value="${escapeHtml(item.role || '')}"></div>
-    <div class="form-group"><label class="admin-app-label">Ulasan</label><textarea class="admin-app-input cms-testimonial-text" rows="3">${escapeHtml(item.text || '')}</textarea></div>
-  </div>`;
-}
-
-function addAdminLandingTestimonialRow(item = {}) {
-  document.getElementById('cmsTestimonialsItems')?.insertAdjacentHTML('beforeend', adminLandingTestimonialCardHtml(item));
-}
-
-function adminLandingContactCardHtml(item = {}) {
-  return `<div class="admin-cms-card admin-cms-contact-row">
-    <div class="admin-cms-card-head"><span>Kontak</span><button type="button" class="admin-cms-remove" onclick="this.closest('.admin-cms-card').remove()">Hapus</button></div>
-    <div class="admin-app-form-grid">
-      <div class="form-group"><label class="admin-app-label">Judul</label><input class="admin-app-input cms-contact-title" type="text" value="${escapeHtml(item.title || '')}"></div>
-      <div class="form-group"><label class="admin-app-label">Warna</label><input class="admin-app-input cms-contact-color" type="text" value="${escapeHtml(item.color || 'var(--rose)')}"></div>
-    </div>
-    <div class="form-group"><label class="admin-app-label">Detail</label><input class="admin-app-input cms-contact-detail" type="text" value="${escapeHtml(item.detail || '')}"></div>
-    <div class="form-group"><label class="admin-app-label">Subteks</label><input class="admin-app-input cms-contact-sub" type="text" value="${escapeHtml(item.sub || '')}"></div>
-    <div class="form-group"><label class="admin-app-label">SVG Path Icon</label><textarea class="admin-app-input cms-contact-icon" rows="2">${escapeHtml(item.icon || '')}</textarea></div>
-  </div>`;
-}
-
-function addAdminLandingContactRow(item = {}) {
-  document.getElementById('cmsContactItems')?.insertAdjacentHTML('beforeend', adminLandingContactCardHtml(item));
-}
-
-function addAdminLandingValueRow(item = {}) {
-  document.getElementById('cmsAboutValues')?.insertAdjacentHTML('beforeend', adminLandingFeatureCardHtml(item, 'cms-value', 'Nilai'));
-}
-
 function fillAdminLandingSectionFields(section, key) {
   if (key === 'site') {
     document.getElementById('cmsSiteName').value = section.name || '';
@@ -3070,46 +3049,41 @@ function fillAdminLandingSectionFields(section, key) {
   }
 
   if (key === 'hero') {
-    document.getElementById('cmsHeroBadge').value = section.badge || '';
     document.getElementById('cmsHeroTitle').value = section.title || '';
     document.getElementById('cmsHeroHighlight').value = section.title_highlight || '';
+    document.getElementById('cmsHeroSuffix').value = section.title_suffix || '';
+    document.getElementById('cmsHeroHighlight2').value = section.title_highlight_2 || '';
     document.getElementById('cmsHeroSubtitle').value = section.subtitle || '';
     document.getElementById('cmsHeroCtaPrimary').value = section.cta_primary || '';
     document.getElementById('cmsHeroCtaSecondary').value = section.cta_secondary || '';
-    const heroStats = document.getElementById('cmsHeroStatsBody');
-    heroStats.innerHTML = (section.stats || []).map((stat) => adminLandingStatRowHtml(stat)).join('') || adminLandingStatRowHtml();
     return;
   }
 
-  if (['features', 'pricing', 'testimonials', 'contact'].includes(key)) {
-    document.querySelector(`.cms-section-badge[data-section="${key}"]`).value = section.badge || '';
-    document.querySelector(`.cms-section-title[data-section="${key}"]`).value = section.title || '';
-    document.querySelector(`.cms-section-subtitle[data-section="${key}"]`).value = section.subtitle || '';
+  if (key === 'features') {
+    document.querySelector('.cms-section-title[data-section="features"]').value = section.title || '';
+    const featuresContainer = document.getElementById('cmsFeaturesItems');
+    featuresContainer.innerHTML = '';
+    (section.items || []).forEach((item) => addAdminLandingFeatureRow(item));
+    if (!section.items?.length) addAdminLandingFeatureRow();
+    return;
+  }
+
+  if (['pricing', 'faq'].includes(key)) {
+    const titleEl = document.querySelector(`.cms-section-title[data-section="${key}"]`);
+    const subtitleEl = document.querySelector(`.cms-section-subtitle[data-section="${key}"]`);
+    const badgeEl = document.querySelector(`.cms-section-badge[data-section="${key}"]`);
+    if (badgeEl) badgeEl.value = section.badge || '';
+    if (titleEl) titleEl.value = section.title || '';
+    if (subtitleEl) subtitleEl.value = section.subtitle || '';
     const containerMap = {
-      features: ['cmsFeaturesItems', addAdminLandingFeatureRow],
       pricing: ['cmsPricingItems', addAdminLandingPricingRow],
-      testimonials: ['cmsTestimonialsItems', addAdminLandingTestimonialRow],
-      contact: ['cmsContactItems', addAdminLandingContactRow],
+      faq: ['cmsFaqItems', addAdminLandingFaqRow],
     };
     const [containerId, addRow] = containerMap[key];
     const container = document.getElementById(containerId);
     container.innerHTML = '';
     (section.items || []).forEach((item) => addRow(item));
     if (!section.items?.length) addRow();
-    return;
-  }
-
-  if (key === 'about') {
-    document.getElementById('cmsAboutBadge').value = section.badge || '';
-    document.getElementById('cmsAboutTitle').value = section.title || '';
-    document.getElementById('cmsAboutTitleBreak').value = section.title_break || '';
-    document.getElementById('cmsAboutParagraphs').value = (section.paragraphs || []).join('\n\n');
-    const aboutStats = document.getElementById('cmsAboutStatsBody');
-    aboutStats.innerHTML = (section.stats || []).map((stat) => adminLandingStatRowHtml(stat)).join('') || adminLandingStatRowHtml();
-    const values = document.getElementById('cmsAboutValues');
-    values.innerHTML = '';
-    (section.values || []).forEach((item) => addAdminLandingValueRow(item));
-    if (!section.values?.length) addAdminLandingValueRow();
     return;
   }
 
@@ -3129,26 +3103,23 @@ function collectAdminLandingSectionPayload(key) {
 
   if (key === 'hero') {
     return {
-      badge: document.getElementById('cmsHeroBadge')?.value?.trim() || '',
       title: document.getElementById('cmsHeroTitle')?.value?.trim() || '',
       title_highlight: document.getElementById('cmsHeroHighlight')?.value?.trim() || '',
+      title_suffix: document.getElementById('cmsHeroSuffix')?.value?.trim() || '',
+      title_highlight_2: document.getElementById('cmsHeroHighlight2')?.value?.trim() || '',
       subtitle: document.getElementById('cmsHeroSubtitle')?.value?.trim() || '',
       cta_primary: document.getElementById('cmsHeroCtaPrimary')?.value?.trim() || '',
       cta_secondary: document.getElementById('cmsHeroCtaSecondary')?.value?.trim() || '',
-      stats: collectAdminLandingStats('cmsHeroStatsBody'),
     };
   }
 
   if (key === 'features') {
     return {
-      badge: document.querySelector('.cms-section-badge[data-section="features"]')?.value?.trim() || '',
       title: document.querySelector('.cms-section-title[data-section="features"]')?.value?.trim() || '',
-      subtitle: document.querySelector('.cms-section-subtitle[data-section="features"]')?.value?.trim() || '',
       items: [...document.querySelectorAll('.admin-cms-feature-row')].map((row) => ({
         title: row.querySelector('.cms-feature-title')?.value?.trim() || '',
         desc: row.querySelector('.cms-feature-desc')?.value?.trim() || '',
-        icon: row.querySelector('.cms-feature-icon')?.value?.trim() || '',
-        color: row.querySelector('.cms-feature-color')?.value?.trim() || 'var(--accent-1)',
+        image: row.querySelector('.cms-feature-image')?.value?.trim() || '',
       })),
     };
   }
@@ -3168,47 +3139,13 @@ function collectAdminLandingSectionPayload(key) {
     };
   }
 
-  if (key === 'testimonials') {
+  if (key === 'faq') {
     return {
-      badge: document.querySelector('.cms-section-badge[data-section="testimonials"]')?.value?.trim() || '',
-      title: document.querySelector('.cms-section-title[data-section="testimonials"]')?.value?.trim() || '',
-      subtitle: document.querySelector('.cms-section-subtitle[data-section="testimonials"]')?.value?.trim() || '',
-      items: [...document.querySelectorAll('.admin-cms-testimonial-row')].map((row) => ({
-        name: row.querySelector('.cms-testimonial-name')?.value?.trim() || '',
-        role: row.querySelector('.cms-testimonial-role')?.value?.trim() || '',
-        text: row.querySelector('.cms-testimonial-text')?.value?.trim() || '',
-        avatar: row.querySelector('.cms-testimonial-avatar')?.value?.trim() || '',
-      })),
-    };
-  }
-
-  if (key === 'about') {
-    return {
-      badge: document.getElementById('cmsAboutBadge')?.value?.trim() || '',
-      title: document.getElementById('cmsAboutTitle')?.value?.trim() || '',
-      title_break: document.getElementById('cmsAboutTitleBreak')?.value?.trim() || '',
-      paragraphs: (document.getElementById('cmsAboutParagraphs')?.value || '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean),
-      stats: collectAdminLandingStats('cmsAboutStatsBody'),
-      values: [...document.querySelectorAll('.admin-cms-value-row')].map((row) => ({
-        title: row.querySelector('.cms-value-title')?.value?.trim() || '',
-        desc: row.querySelector('.cms-value-desc')?.value?.trim() || '',
-        icon: row.querySelector('.cms-value-icon')?.value?.trim() || '',
-        color: row.querySelector('.cms-value-color')?.value?.trim() || 'var(--amber)',
-      })),
-    };
-  }
-
-  if (key === 'contact') {
-    return {
-      badge: document.querySelector('.cms-section-badge[data-section="contact"]')?.value?.trim() || '',
-      title: document.querySelector('.cms-section-title[data-section="contact"]')?.value?.trim() || '',
-      subtitle: document.querySelector('.cms-section-subtitle[data-section="contact"]')?.value?.trim() || '',
-      items: [...document.querySelectorAll('.admin-cms-contact-row')].map((row) => ({
-        title: row.querySelector('.cms-contact-title')?.value?.trim() || '',
-        detail: row.querySelector('.cms-contact-detail')?.value?.trim() || '',
-        sub: row.querySelector('.cms-contact-sub')?.value?.trim() || '',
-        icon: row.querySelector('.cms-contact-icon')?.value?.trim() || '',
-        color: row.querySelector('.cms-contact-color')?.value?.trim() || 'var(--rose)',
+      title: document.querySelector('.cms-section-title[data-section="faq"]')?.value?.trim() || '',
+      subtitle: document.querySelector('.cms-section-subtitle[data-section="faq"]')?.value?.trim() || '',
+      items: [...document.querySelectorAll('.admin-cms-faq-row')].map((row) => ({
+        question: row.querySelector('.cms-faq-question')?.value?.trim() || '',
+        answer: row.querySelector('.cms-faq-answer')?.value?.trim() || '',
       })),
     };
   }
@@ -3495,21 +3432,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const refEl = document.getElementById('refLinkText');
   if (refEl && referralUrl) refEl.textContent = referralUrl;
 
-  if (document.getElementById('featuresGrid')) {
-    renderFeatures();
+  if (document.getElementById('appLanding')) {
     renderPricing();
-    renderTestimonials();
-    renderAboutValues();
-    renderContacts();
-    createParticles();
 
     setTimeout(revealOnScroll, 100);
-    setTimeout(animateCounters, 600);
 
     window.addEventListener('scroll', () => {
       updateNav();
       revealOnScroll();
-      animateCounters();
     }, { passive: true });
   }
 

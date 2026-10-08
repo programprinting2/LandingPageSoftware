@@ -66,4 +66,5 @@ Route::put('/api/admin/mail-settings', [AdminMailSettingsController::class, 'upd
 Route::post('/api/admin/mail-settings/test', [AdminMailSettingsController::class, 'sendTest'])->name('admin.mail-settings.test');
 
 Route::get('/api/admin/landing-content', [AdminLandingContentController::class, 'index'])->name('admin.landing-content.index');
+Route::post('/api/admin/landing-content/upload-image', [AdminLandingContentController::class, 'uploadImage'])->name('admin.landing-content.upload-image');
 Route::put('/api/admin/landing-content/{key}', [AdminLandingContentController::class, 'update'])->name('admin.landing-content.update');

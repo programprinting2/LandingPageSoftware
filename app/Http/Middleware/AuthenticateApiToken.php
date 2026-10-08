@@ -33,6 +33,15 @@ class AuthenticateApiToken
             ], 401);
         }
 
+        if (! $this->authService->isClientActive($user)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akun dinonaktifkan. Hubungi admin.',
+                'logged_in' => false,
+                'account_inactive' => true,
+            ], 403);
+        }
+
         $request->attributes->set('apiUser', $user);
         $request->attributes->set('apiToken', $token);
 

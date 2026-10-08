@@ -41,6 +41,7 @@ trait BuildsSoftsaleViewData
             'adminTransactionsUrl' => route('admin.transactions.index'),
             'adminPaymentOrdersUrl' => route('admin.payment-orders.index'),
             'adminLandingContentUrl' => route('admin.landing-content.index'),
+            'adminLandingImageUploadUrl' => route('admin.landing-content.upload-image'),
             'adminMailSettingsUrl' => route('admin.mail-settings.show'),
             'adminMailSettingsTestUrl' => route('admin.mail-settings.test'),
             'liveEditUrl' => route('landing', ['live_edit' => 1]),

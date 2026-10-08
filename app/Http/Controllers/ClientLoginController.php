@@ -30,6 +30,15 @@ class ClientLoginController extends Controller
                 ], 403);
             }
 
+            $inactive = $this->authService->findInactiveClientByCredentials($email, $validated['password']);
+
+            if ($inactive) {
+                return response()->json([
+                    'message' => 'Akun dinonaktifkan. Hubungi admin.',
+                    'account_inactive' => true,
+                ], 403);
+            }
+
             return response()->json([
                 'message' => 'Email atau password salah.',
             ], 422);

@@ -1,11 +1,46 @@
-﻿<!-- FITUR -->
-<section id="fitur" class="features-section">
-  <div class="container">
-    <div style="text-align:center;" class="reveal">
-      <div class="badge-label" style="background:rgba(56,126,245,0.08); color:var(--accent-1);">{{ $cms['features']['badge'] ?? 'Fitur Unggulan' }}</div>
-      <h2 class="section-title">{{ $cms['features']['title'] ?? 'Semua yang bisnis Anda butuhkan' }}</h2>
-      <p class="section-sub">{{ $cms['features']['subtitle'] ?? '' }}</p>
+﻿<section class="features-split-section" id="fitur">
+  <div class="features-split-header reveal">
+    <h2>{{ $cms['features']['title'] ?? 'Dirancang untuk Produktivitas Cetak' }}</h2>
+  </div>
+  <div class="features-split-body">
+    <div class="features-split-bg">
+      <div class="features-split-bg-left"></div>
+      <div class="features-split-bg-right"></div>
     </div>
-    <div class="features-grid" id="featuresGrid"></div>
+    <div class="container features-split-rows">
+      @foreach(($cms['features']['items'] ?? []) as $i => $feature)
+      <div class="features-split-row reveal">
+        @if($i % 2 === 0)
+        <div class="feature-text feature-text--navy">
+          <h3>{{ $feature['title'] }}</h3>
+          @if(!empty($feature['desc']))
+          <p>{{ $feature['desc'] }}</p>
+          @endif
+        </div>
+        <div class="feature-media">
+          <div class="features-split-placeholder">
+            @if(!empty($feature['image']))
+            <img src="{{ $feature['image'] }}" alt="{{ $feature['title'] }}">
+            @endif
+          </div>
+        </div>
+        @else
+        <div class="feature-media">
+          <div class="features-split-placeholder">
+            @if(!empty($feature['image']))
+            <img src="{{ $feature['image'] }}" alt="{{ $feature['title'] }}">
+            @endif
+          </div>
+        </div>
+        <div class="feature-text feature-text--navy feature-text--boxed">
+          <h3>{{ $feature['title'] }}</h3>
+          @if(!empty($feature['desc']))
+          <p>{{ $feature['desc'] }}</p>
+          @endif
+        </div>
+        @endif
+      </div>
+      @endforeach
+    </div>
   </div>
 </section>

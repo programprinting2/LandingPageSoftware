@@ -90,16 +90,19 @@ class AdminClientController extends Controller
             ]);
 
             if (array_key_exists('applications', $validated) || array_key_exists('application_ids', $validated)) {
-                $before = $client->applications()
-                    ->get()
-                    ->keyBy('id')
-                    ->map(fn ($application) => (int) $application->pivot->application_package_id);
-
                 $assignments = $this->resolveApplicationAssignments($validated);
-                $this->syncClientApplications($client, $assignments);
 
-                $client->load('applications');
-                $this->recordClientApplicationChanges($client, $before, $assignments);
+                if ($assignments !== []) {
+                    $before = $client->applications()
+                        ->get()
+                        ->keyBy('id')
+                        ->map(fn ($application) => (int) $application->pivot->application_package_id);
+
+                    $this->syncClientApplications($client, $assignments);
+
+                    $client->load('applications');
+                    $this->recordClientApplicationChanges($client, $before, $assignments);
+                }
             }
         });
 
@@ -163,15 +166,26 @@ class AdminClientController extends Controller
                 ]);
             }
 
+            $existingPackageId = (int) ($existing?->pivot?->application_package_id ?? 0);
+            $samePackage = $existingPackageId > 0 && $existingPackageId === (int) $package->id;
             $purchasedAt = $this->parsePivotDate($existing?->pivot?->purchased_at) ?? now();
-            $expiresAt = (int) $package->duration_days > 0
-                ? $purchasedAt->copy()->addDays((int) $package->duration_days)
-                : null;
+
+            if ($samePackage && $existing?->pivot?->expires_at) {
+                $expiresAt = $this->parsePivotDate($existing->pivot->expires_at);
+            } elseif ((int) $package->duration_days > 0) {
+                $expiresAt = $purchasedAt->copy()->addDays((int) $package->duration_days);
+            } else {
+                $expiresAt = null;
+            }
+
+            $status = $samePackage && $existing?->pivot?->status
+                ? (string) $existing->pivot->status
+                : 'active';
 
             $sync[$applicationId] = [
                 'application_package_id' => $package->id,
                 'devices_max' => (int) $package->devices_quota,
-                'status' => 'active',
+                'status' => $status,
                 'purchased_at' => $purchasedAt,
                 'expires_at' => $expiresAt,
             ];

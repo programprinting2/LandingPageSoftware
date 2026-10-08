@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\UpdateLandingContentRequest;
 use App\Services\LandingContentService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class AdminLandingContentController extends Controller
 {
@@ -33,6 +35,27 @@ class AdminLandingContentController extends Controller
             'message' => 'Konten halaman utama berhasil disimpan.',
             'section' => $section,
             'key' => $key,
+        ]);
+    }
+
+    public function uploadImage(Request $request): JsonResponse
+    {
+        $request->validate([
+            'image' => ['required', 'file', 'mimes:jpeg,jpg,png,webp,gif,svg', 'max:5120'],
+        ]);
+
+        $directory = public_path('images/landing/features');
+        if (! is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        $file = $request->file('image');
+        $extension = strtolower($file->getClientOriginalExtension() ?: 'png');
+        $filename = Str::uuid().'.'.$extension;
+        $file->move($directory, $filename);
+
+        return response()->json([
+            'url' => '/images/landing/features/'.$filename,
         ]);
     }
 }

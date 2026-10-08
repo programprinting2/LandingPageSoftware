@@ -121,7 +121,7 @@
                       <thead>
                         <tr>
                           <th>Nama Paket</th>
-                          <th>Limit</th>
+                          <th class="col-pkg-quota-head">Limit</th>
                           <th>Hari</th>
                           <th class="col-pkg-price-head">Harga</th>
                           <th class="col-pkg-discount-head">Discount %</th>

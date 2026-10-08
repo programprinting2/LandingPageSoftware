@@ -20,7 +20,7 @@ class StoreAdminClientRequest extends FormRequest
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'whatsapp' => ['required', 'string', 'max:20', 'regex:/^08[0-9]{8,13}$/'],
             'password' => ['required', 'string', Password::min(8)],
-            'status' => ['required', 'in:active,trial,expired,pending'],
+            'status' => ['required', 'in:active,inactive'],
             'email_verified' => ['nullable', 'boolean'],
             'applications' => ['nullable', 'array'],
             'applications.*.application_id' => ['required', 'integer', 'exists:applications,id'],

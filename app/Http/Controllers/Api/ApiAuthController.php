@@ -53,6 +53,16 @@ class ApiAuthController extends Controller
                 ], 403);
             }
 
+            $inactive = $this->authService->findInactiveClientByCredentials($email, $validated['password']);
+
+            if ($inactive) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Akun dinonaktifkan. Hubungi admin.',
+                    'account_inactive' => true,
+                ], 403);
+            }
+
             return response()->json([
                 'status' => 'error',
                 'message' => 'Email atau password salah.',

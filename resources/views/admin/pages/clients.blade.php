@@ -23,11 +23,10 @@
               @php
                 $statusBadge = match ($client->status) {
                     'active' => 'badge-active',
-                    'trial' => 'badge-trial',
-                    'expired' => 'badge-expired',
+                    'inactive' => 'badge-expired',
                     default => 'badge-pending',
                 };
-                $statusLabel = ucfirst($client->status);
+                $statusLabel = $client->status === 'inactive' ? 'Nonaktif' : 'Aktif';
               @endphp
               <tr data-client-id="{{ $client->id }}">
                 <td class="td-bold">{{ $client->company_name }}</td>
@@ -110,11 +109,12 @@
                       <label class="admin-app-label" for="adminClientEmail">Email</label>
                       <div class="admin-client-email-row">
                         <input class="admin-app-input" id="adminClientEmail" type="email" required placeholder="email@example.com">
-                        <label class="admin-client-email-verify" for="adminClientEmailVerified" title="Tandai email sudah diverifikasi">
+                        <label class="admin-client-email-verify" for="adminClientEmailVerified" title="Wajib untuk bisa login">
                           <input type="checkbox" id="adminClientEmailVerified">
                           <span>Terverifikasi</span>
                         </label>
                       </div>
+                      <p class="admin-app-label-hint" style="margin-top:4px;">Centang jika email sudah dikonfirmasi — wajib agar client bisa login.</p>
                     </div>
                     <div class="form-group">
                       <label class="admin-app-label" for="adminClientWhatsapp">No. WhatsApp</label>
@@ -130,8 +130,8 @@
 
               <section class="admin-app-panel" data-panel="applications">
                 <div class="admin-app-panel-head">
-                  <h4>Aplikasi & Status</h4>
-                  <p>Pilih aplikasi yang dibeli dan status akun client</p>
+                  <h4>Aplikasi & Lisensi</h4>
+                  <p>Pilih aplikasi dan paket lisensi per produk</p>
                 </div>
                 <div class="admin-app-panel-body">
                   <div class="form-group">
@@ -140,13 +140,12 @@
                     <p class="admin-app-label-hint" style="margin-top:8px;">Centang aplikasi, lalu pilih paket (Trial, Basic, Pro, dll.) sesuai Master Aplikasi.</p>
                   </div>
                   <div class="form-group" style="margin-bottom:0;">
-                    <label class="admin-app-label" for="adminClientStatus">Status</label>
+                    <label class="admin-app-label" for="adminClientStatus">Status akun</label>
                     <select class="admin-app-input" id="adminClientStatus" required>
-                      <option value="active">Active</option>
-                      <option value="trial">Trial</option>
-                      <option value="expired">Expired</option>
-                      <option value="pending">Pending</option>
+                      <option value="active">Aktif</option>
+                      <option value="inactive">Nonaktif</option>
                     </select>
+                    <p class="admin-app-label-hint" style="margin-top:6px;">Kontrol admin — Nonaktif memblokir login (mis. pelanggaran). Durasi lisensi tetap dari paket.</p>
                   </div>
                 </div>
               </section>
