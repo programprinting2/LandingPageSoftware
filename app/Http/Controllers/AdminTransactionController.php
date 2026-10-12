@@ -149,7 +149,7 @@ class AdminTransactionController extends Controller
         $summary = [
             ['label' => 'Provider', 'value' => $raw['provider'] ?? 'Komerce'],
             ['label' => 'Environment', 'value' => strtoupper((string) ($raw['environment'] ?? '—'))],
-            ['label' => 'Order SoftSale', 'value' => $raw['softsale_order_id'] ?? '—'],
+            ['label' => 'Order ID', 'value' => $raw['softsale_order_id'] ?? '—'],
             ['label' => 'Payment ID Komerce', 'value' => $raw['komerce_payment_id'] ?? '—'],
             ['label' => 'External ID', 'value' => $raw['external_id'] ?? '—'],
             ['label' => 'Status Gateway', 'value' => $raw['payment_status'] ?? '—'],

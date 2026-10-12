@@ -8,7 +8,7 @@
 
       </div>
 
-      <div id="clientLicenseSummary" class="glass" style="padding:20px 24px;margin-bottom:20px;">
+      <div id="clientLicenseSummary" class="stat-card" style="margin-bottom:20px;">
 
         <div style="font-size:13px;color:var(--text-muted);margin-bottom:6px;">Kuota perangkat</div>
 

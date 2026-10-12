@@ -1,0 +1,542 @@
+/* ═══════════════════════════════════════════════════════════════
+   QUICK SPOT COLOR — Dashboard Light Theme
+   ═══════════════════════════════════════════════════════════════ */
+
+body:has(.app-dashboard.active) {
+  --navy:       #0F172A;
+  --orange:     #FF5500;
+  --bg-main:    #EBEEF0;
+  --bg-card:    #FFFFFF;
+  --bg-surface: #F8FAFC;
+  --border:     #E2E8F0;
+  --border-h:   rgba(255, 85, 0, 0.35);
+  --text-1:     #0F172A;
+  --text-2:     #374151;
+  --text-3:     #6B7280;
+  --accent-1:   #FF5500;
+  --accent-2:   #FF5500;
+  --accent-g:   #FF5500;
+  --shadow:     0 4px 24px rgba(15, 23, 42, 0.06);
+  --radius-btn: 8px;
+
+  background: var(--bg-main);
+  color: #262626;
+}
+
+body:has(.app-dashboard.active) ::selection {
+  background: rgba(255, 85, 0, 0.2);
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────── */
+body:has(.app-dashboard.active) .dash-sidebar {
+  background: var(--navy);
+  border-right: none;
+  box-shadow: 2px 0 16px rgba(15, 23, 42, 0.08);
+}
+
+body:has(.app-dashboard.active) .dash-sidebar-brand {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+body:has(.app-dashboard.active) .dash-sidebar-brand-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.2;
+}
+
+body:has(.app-dashboard.active) .dash-sidebar-brand span {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+body:has(.app-dashboard.active) .dash-nav-item {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+body:has(.app-dashboard.active) .dash-nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+body:has(.app-dashboard.active) .dash-nav-item.active {
+  background: rgba(255, 85, 0, 0.15);
+  color: #FF5500;
+  font-weight: 600;
+}
+
+body:has(.app-dashboard.active) .dash-sidebar-footer {
+  border-top-color: rgba(255, 255, 255, 0.08);
+}
+
+body:has(.app-dashboard.active) .dash-logout {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+body:has(.app-dashboard.active) .dash-logout:hover {
+  color: #fca5a5;
+}
+
+/* ── Main content ──────────────────────────────────────────────── */
+body:has(.app-dashboard.active) .dash-main {
+  background: var(--bg-main);
+}
+
+body:has(.app-dashboard.active) .dash-header h1 {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .dash-header p {
+  color: var(--text-3);
+}
+
+/* ── Cards & tables (no blur for performance) ──────────────────── */
+body:has(.app-dashboard.active) .stat-card,
+body:has(.app-dashboard.active) .dash-table-wrap,
+body:has(.app-dashboard.active) .detail-grid,
+body:has(.app-dashboard.active) .dl-card,
+body:has(.app-dashboard.active) .dash-form-card {
+  background: var(--bg-card);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body:has(.app-dashboard.active) .stat-label {
+  color: var(--text-3);
+}
+
+body:has(.app-dashboard.active) .stat-value {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .dash-table thead th {
+  background: var(--bg-surface);
+  border-bottom-color: var(--border);
+  color: var(--text-3);
+}
+
+body:has(.app-dashboard.active) .dash-table tbody tr {
+  border-bottom-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .dash-table tbody tr:hover {
+  background: var(--bg-surface);
+}
+
+body:has(.app-dashboard.active) .dash-table tbody td {
+  color: var(--text-2);
+}
+
+body:has(.app-dashboard.active) .td-mono {
+  color: var(--orange);
+}
+
+body:has(.app-dashboard.active) .td-bold {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .dash-table-header h3 {
+  color: var(--navy);
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────── */
+body:has(.app-dashboard.active) .dash-tabs {
+  background: var(--bg-surface);
+  border-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .dash-tab {
+  color: var(--text-3);
+}
+
+body:has(.app-dashboard.active) .dash-tab:hover {
+  color: var(--text-2);
+  background: #fff;
+}
+
+body:has(.app-dashboard.active) .dash-tab.active {
+  background: #fff;
+  color: var(--orange);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+/* ── Buttons ───────────────────────────────────────────────────── */
+body:has(.app-dashboard.active) .btn-primary {
+  background: var(--orange);
+  color: #fff;
+}
+
+body:has(.app-dashboard.active) .btn-primary:hover {
+  background: #e64d00;
+  box-shadow: 0 6px 20px rgba(255, 85, 0, 0.25);
+}
+
+body:has(.app-dashboard.active) .btn-secondary {
+  background: var(--bg-surface);
+  border-color: var(--border);
+  color: var(--text-2);
+}
+
+body:has(.app-dashboard.active) .btn-secondary:hover {
+  background: #fff;
+  border-color: #CBD5E1;
+  color: var(--navy);
+}
+
+/* ── Detail grid & download cards ──────────────────────────────── */
+body:has(.app-dashboard.active) .detail-item {
+  background: var(--bg-surface);
+}
+
+body:has(.app-dashboard.active) .detail-label {
+  color: var(--text-3);
+}
+
+body:has(.app-dashboard.active) .detail-value {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .dl-card:hover {
+  border-color: var(--border-h);
+}
+
+body:has(.app-dashboard.active) .dl-name {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .dl-meta {
+  color: var(--text-3);
+}
+
+/* ── Ref link card ─────────────────────────────────────────────── */
+body:has(.app-dashboard.active) .ref-link-card {
+  background: linear-gradient(135deg, rgba(255, 85, 0, 0.06), rgba(255, 85, 0, 0.02));
+  border-color: rgba(255, 85, 0, 0.2);
+}
+
+body:has(.app-dashboard.active) .ref-link-text {
+  background: var(--bg-surface);
+  color: var(--orange);
+  border: 1px solid var(--border);
+}
+
+/* ── Revenue bars ────────────────────────────────────────────────── */
+body:has(.app-dashboard.active) .revenue-label {
+  color: var(--text-3);
+}
+
+/* ── Forms in dashboard ────────────────────────────────────────── */
+body:has(.app-dashboard.active) .dash-form-card h3 {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .form-label {
+  color: var(--text-2);
+}
+
+body:has(.app-dashboard.active) .form-input-wrap {
+  background: #fff;
+  border-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .form-input-wrap:focus-within {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 85, 0, 0.12);
+}
+
+body:has(.app-dashboard.active) .form-input {
+  color: #262626;
+}
+
+/* ── Admin settings (light) ────────────────────────────────────── */
+body:has(.app-dashboard.active) #admin-settings .admin-app-label {
+  color: var(--text-2);
+}
+
+body:has(.app-dashboard.active) #admin-settings .admin-app-input,
+body:has(.app-dashboard.active) #admin-settings select.admin-app-input {
+  background: #fff;
+  border-color: var(--border);
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) #admin-settings .admin-app-input:focus,
+body:has(.app-dashboard.active) #admin-settings select.admin-app-input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 85, 0, 0.12);
+}
+
+body:has(.app-dashboard.active) #admin-settings .admin-settings-panel-head h3,
+body:has(.app-dashboard.active) #admin-settings .admin-settings-subsection h4,
+body:has(.app-dashboard.active) #admin-settings .mail-settings-section-title {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) #admin-settings .admin-settings-panel-head p,
+body:has(.app-dashboard.active) #admin-settings .admin-settings-subsection p,
+body:has(.app-dashboard.active) #admin-settings .mail-settings-section-desc,
+body:has(.app-dashboard.active) #admin-settings .mail-settings-hint {
+  color: var(--text-3);
+}
+
+body:has(.app-dashboard.active) #admin-settings .admin-settings-subsection,
+body:has(.app-dashboard.active) #admin-settings .mail-settings-section {
+  border-top-color: var(--border);
+}
+
+body:has(.app-dashboard.active) #admin-settings .mail-settings-help {
+  background: rgba(255, 85, 0, 0.06);
+  border-color: rgba(255, 85, 0, 0.2);
+  color: var(--text-2);
+}
+
+body:has(.app-dashboard.active) #admin-settings .mail-settings-help code {
+  color: var(--orange);
+}
+
+body:has(.app-dashboard.active) #admin-settings .admin-app-alert.is-error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+body:has(.app-dashboard.active) #admin-settings .admin-app-alert.is-success {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+
+/* ── Landing CMS (light) ─────────────────────────────────────────── */
+body:has(.app-dashboard.active) .admin-cms-shell {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .admin-cms-actions {
+  background: var(--bg-surface);
+  border-top-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .admin-cms-repeat-head {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .admin-cms-card {
+  background: var(--bg-surface);
+  border-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .admin-cms-card-head {
+  color: var(--text-2);
+}
+
+body:has(.app-dashboard.active) .cms-feature-image-preview {
+  background: var(--bg-surface);
+  border-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .cms-feature-image-empty,
+body:has(.app-dashboard.active) .cms-feature-image-hint {
+  color: var(--text-3);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-side {
+  background: var(--bg-surface);
+  border-right-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-main {
+  background: var(--bg-main);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-panel-head h4 {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-panel-head p {
+  color: var(--text-3);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-panel-body {
+  background: #fff;
+  border-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-label {
+  color: var(--text-2);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-input,
+body:has(.app-dashboard.active) .admin-cms-shell select.admin-app-input,
+body:has(.app-dashboard.active) .admin-cms-shell textarea.admin-app-input {
+  background: #fff;
+  border-color: var(--border);
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-input:focus,
+body:has(.app-dashboard.active) .admin-cms-shell select.admin-app-input:focus,
+body:has(.app-dashboard.active) .admin-cms-shell textarea.admin-app-input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 85, 0, 0.12);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-nav-item {
+  color: var(--text-2);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-nav-item:hover {
+  background: #fff;
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-nav-item.active {
+  background: rgba(255, 85, 0, 0.08);
+  border-color: rgba(255, 85, 0, 0.25);
+  color: var(--orange);
+}
+
+body:has(.app-dashboard.active) .admin-cms-shell .admin-app-nav-item.active svg {
+  stroke: var(--orange);
+}
+
+body:has(.app-dashboard.active) .admin-cms-remove {
+  border-color: rgba(240, 104, 104, 0.35);
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+body:has(.app-dashboard.active) .admin-cms-remove:hover {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* ── Invoice toolbar ───────────────────────────────────────────── */
+body:has(.app-dashboard.active) .admin-invoice-search,
+body:has(.app-dashboard.active) .admin-invoice-filter {
+  background: #fff;
+  border-color: var(--border);
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .admin-invoice-search:focus,
+body:has(.app-dashboard.active) .admin-invoice-filter:focus {
+  border-color: var(--orange);
+}
+
+body:has(.app-dashboard.active) .admin-invoice-table .cell-main {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .admin-invoice-table .cell-sub {
+  color: var(--text-3);
+}
+
+/* ── Admin modal nav (orange accent) ─────────────────────────────── */
+body:has(.app-dashboard.active) .admin-app-nav-item.active {
+  background: rgba(255, 85, 0, 0.08);
+  border-color: rgba(255, 85, 0, 0.25);
+  color: var(--orange);
+}
+
+body:has(.app-dashboard.active) .admin-app-nav-item.active svg {
+  stroke: var(--orange);
+}
+
+body:has(.app-dashboard.active) .admin-app-input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 85, 0, 0.12);
+}
+
+body:has(.app-dashboard.active) .admin-client-pkg-option:has(input:checked) {
+  border-color: rgba(255, 85, 0, 0.35);
+  background: rgba(255, 85, 0, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 85, 0, 0.2);
+}
+
+body:has(.app-dashboard.active) .admin-app-checklist-light .admin-app-check-item:hover {
+  background: rgba(255, 85, 0, 0.04);
+  border-color: rgba(255, 85, 0, 0.2);
+}
+
+/* ── Transaction accordion panels ──────────────────────────────── */
+body:has(.app-dashboard.active) .admin-trx-acc-panel {
+  background: var(--bg-surface);
+}
+
+body:has(.app-dashboard.active) .admin-trx-gateway-title {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .admin-trx-gateway-table th {
+  border-bottom-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .admin-trx-gateway-table td {
+  border-bottom-color: var(--border);
+  color: var(--text-2);
+}
+
+body:has(.app-dashboard.active) .admin-trx-gateway-table td:last-child {
+  color: var(--navy);
+}
+
+body:has(.app-dashboard.active) .admin-trx-gateway-json {
+  background: var(--bg-surface);
+  border-color: var(--border);
+  color: var(--text-2);
+}
+
+/* ── Checklist items in dashboard ──────────────────────────────── */
+body:has(.app-dashboard.active) .admin-app-check-item {
+  background: var(--bg-surface);
+  border-color: var(--border);
+}
+
+body:has(.app-dashboard.active) .admin-app-check-item small {
+  color: var(--text-3);
+}
+
+/* ── Faster page transitions ───────────────────────────────────── */
+body:has(.app-dashboard.active) .app-dashboard.active {
+  animation: fadeInPage 0.25s ease;
+}
+
+body:has(.app-dashboard.active) .dash-page.active {
+  animation: fadeInPage 0.2s ease;
+}
+
+/* ── Progress bars & stat rows ───────────────────────────────────── */
+.dash-progress-track {
+  height: 8px;
+  border-radius: 4px;
+  background: #E2E8F0;
+  overflow: hidden;
+}
+
+.dash-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.dash-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--bg-surface);
+  margin-bottom: 12px;
+}
+
+.dash-stat-row:last-child {
+  margin-bottom: 0;
+}
+
+.dash-stat-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}

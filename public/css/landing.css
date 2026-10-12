@@ -197,54 +197,249 @@ body:has(.app-landing) ::selection {
    HERO
    ═══════════════════════════════════════════════════════════════ */
 .app-landing .hero {
+  position: relative;
   min-height: 100dvh;
-  padding: calc(72px + 10vh) 0 48px;
+  padding: calc(72px + 28px) 0 48px;
   box-sizing: border-box;
   display: flex;
   align-items: flex-start;
-  text-align: left;
+  text-align: center;
   background: var(--bg-main);
   overflow: visible;
 }
 
+.hero-bg-decor {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
 .app-landing .hero > .container {
+  position: relative;
+  z-index: 1;
   width: 100%;
 }
 
-.app-landing .hero-inner {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 0;
-  align-items: center;
+.hero-memphis-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
 }
 
-.app-landing .hero h1 {
+.hero-memphis-blob--navy {
+  width: 360px;
+  height: 360px;
+  bottom: 0;
+  left: -8%;
+  background: rgba(15, 23, 42, 0.1);
+}
+
+.hero-memphis-svg {
+  position: absolute;
+  pointer-events: none;
+}
+
+.hero-memphis-svg--wave {
+  width: min(72vw, 680px);
+  height: auto;
+  right: -6%;
+  bottom: 8%;
+  opacity: 1;
+}
+
+.hero-memphis-svg--squiggle {
+  width: 160px;
+  height: auto;
+  top: 14%;
+  left: 4%;
+  animation: hero-memphis-float-dots 7s ease-in-out infinite;
+}
+
+.hero-memphis-svg--zigzag {
+  width: 100px;
+  top: 18%;
+  right: 18%;
+  animation: hero-memphis-float-dots 5s ease-in-out infinite reverse;
+}
+
+.hero-memphis-svg--dots {
+  width: 90px;
+  bottom: 18%;
+  left: 30%;
+  animation: hero-memphis-float-dots 6s ease-in-out infinite;
+}
+
+.hero-memphis-shape {
+  position: absolute;
+  pointer-events: none;
+}
+
+.hero-memphis-ring {
+  border-radius: 50%;
+  border: 3px solid var(--orange);
+}
+
+.hero-memphis-ring--1 {
+  width: 72px;
+  height: 72px;
+  top: 22%;
+  right: 28%;
+  opacity: 0.45;
+  animation: hero-memphis-spin 18s linear infinite;
+}
+
+.hero-memphis-ring--2 {
+  width: 44px;
+  height: 44px;
+  bottom: 30%;
+  right: 6%;
+  border-color: var(--navy);
+  border-width: 2.5px;
+  opacity: 0.3;
+}
+
+.hero-memphis-disc {
+  border-radius: 50%;
+}
+
+.hero-memphis-disc--1 {
+  width: 18px;
+  height: 18px;
+  top: 38%;
+  right: 12%;
+  background: var(--orange);
+  opacity: 0.65;
+}
+
+.hero-memphis-disc--2 {
+  width: 28px;
+  height: 28px;
+  bottom: 22%;
+  left: 12%;
+  background: var(--navy);
+  opacity: 0.2;
+}
+
+.hero-memphis-tri {
+  width: 0;
+  height: 0;
+  top: 12%;
+  right: 10%;
+  border-left: 22px solid transparent;
+  border-right: 22px solid transparent;
+  border-bottom: 38px solid rgba(255, 85, 0, 0.35);
+  transform: rotate(18deg);
+}
+
+.hero-memphis-cross {
+  width: 28px;
+  height: 28px;
+  bottom: 36%;
+  left: 8%;
+  opacity: 0.35;
+}
+
+.hero-memphis-cross::before,
+.hero-memphis-cross::after {
+  content: '';
+  position: absolute;
+  background: var(--navy);
+  border-radius: 2px;
+}
+
+.hero-memphis-cross::before {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  transform: translateY(-50%);
+}
+
+.hero-memphis-cross::after {
+  left: 50%;
+  top: 0;
+  width: 3px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+
+.hero-memphis-pill {
+  width: 56px;
+  height: 22px;
+  top: 52%;
+  left: 6%;
+  border-radius: 999px;
+  background: rgba(255, 85, 0, 0.25);
+  transform: rotate(-24deg);
+}
+
+.hero-memphis-arc {
+  width: 110px;
+  height: 55px;
+  bottom: 12%;
+  right: 22%;
+  border: 3px solid var(--navy);
+  border-bottom: none;
+  border-radius: 110px 110px 0 0;
+  opacity: 0.22;
+  transform: rotate(-8deg);
+}
+
+@keyframes hero-memphis-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(2deg); }
+}
+
+@keyframes hero-memphis-float-dots {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(-12px, -28px) rotate(3deg); }
+}
+
+@keyframes hero-memphis-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.app-landing .hero-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  max-width: 1140px;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.app-landing .hero h1,
+.app-landing .hero-headline {
   font-size: clamp(32px, 4.5vw, 52px);
   font-weight: 800;
   line-height: 1.35;
   letter-spacing: -1px;
   color: var(--navy);
-  margin-bottom: 32px;
-  max-width: none;
-  margin-left: 0;
-  margin-right: 0;
-  text-align: left;
+  margin: 0 0 45px;
+  max-width: 1140px;
+  width: 100%;
+  text-align: center;
 }
 
 .app-landing .hero-sub {
   font-size: 17px;
   color: #262626;
-  max-width: 480px;
-  margin: 0 0 64px;
+  max-width: 560px;
+  margin: 45px 0 32px;
   line-height: 1.8;
-  text-align: left;
+  text-align: center;
 }
 
 .app-landing .hero-actions {
   display: flex;
   gap: 16px;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   flex-wrap: wrap;
 }
 
@@ -262,11 +457,13 @@ body:has(.app-landing) ::selection {
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 100%;
+  margin: 0;
 }
 
 .app-landing .hero-visual img {
   width: 100%;
-  max-width: 420px;
+  max-width: none;
   height: auto;
   object-fit: contain;
 }
@@ -275,7 +472,7 @@ body:has(.app-landing) ::selection {
    VIDEO SHOWCASE
    ═══════════════════════════════════════════════════════════════ */
 .video-section {
-  padding: 0 0 60px;
+  padding: 0 0 80px;
   margin-top: 0;
   background: transparent;
   position: relative;
@@ -283,7 +480,7 @@ body:has(.app-landing) ::selection {
 }
 
 .video-section .container {
-  margin-top: -110px;
+  margin-top: -80px;
 }
 
 .video-wrapper {
@@ -361,12 +558,12 @@ body:has(.app-landing) ::selection {
    WORKFLOW
    ═══════════════════════════════════════════════════════════════ */
 .workflow-section {
-  padding: 100px 0;
+  padding: 140px 0 100px;
   background: var(--white);
 }
 
 .workflow-header {
-  text-align: center;
+  text-align: left;
   margin-bottom: 48px;
 }
 
@@ -374,24 +571,63 @@ body:has(.app-landing) ::selection {
   color: var(--navy);
 }
 
-.workflow-grid {
+.workflow-body {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 48px;
+  align-items: center;
+}
+
+.app-landing .workflow-card.reveal.reveal-from-left {
+  transform: translateX(-48px);
+}
+
+.app-landing .workflow-card.reveal.reveal-from-left.visible {
+  transform: translateX(0);
+}
+
+.workflow-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
   align-items: stretch;
+  width: 100%;
+  max-width: 520px;
+}
+
+.workflow-preview {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.workflow-preview img {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-md);
 }
 
 .workflow-card {
   background: var(--bg-card);
   border: 1px solid rgba(107, 114, 128, 0.2);
   border-radius: var(--radius-md);
-  padding: 28px 24px;
+  padding: 16px 18px;
   text-align: start;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  height: 100%;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
   transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.workflow-card-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .workflow-card:hover {
@@ -401,23 +637,24 @@ body:has(.app-landing) ::selection {
 
 .workflow-step-num {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: #E2E8F0;
-  color: var(--navy);
+  background: var(--navy);
+  color: var(--white);
   font-size: 15px;
   font-weight: 800;
-  margin-bottom: 16px;
+  margin: 0;
 }
 
 .workflow-card h3 {
   font-size: 20px;
   font-weight: 800;
   color: var(--orange);
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   line-height: 1.25;
   letter-spacing: 0.2px;
 }
@@ -735,32 +972,43 @@ body:has(.app-landing) ::selection {
     display: block;
   }
 
-  .app-landing .hero-inner {
+  .hero-memphis-svg--squiggle,
+  .hero-memphis-svg--zigzag,
+  .hero-memphis-tri,
+  .hero-memphis-cross,
+  .hero-memphis-pill {
+    display: none;
+  }
+
+  .hero-memphis-blob--navy {
+    width: 260px;
+    height: 260px;
+    left: -16%;
+  }
+
+  .hero-memphis-svg--wave {
+    width: 110vw;
+    right: -20%;
+    opacity: 0.7;
+  }
+
+  .hero-memphis-svg--dots {
+    left: 6%;
+    right: auto;
+    bottom: 12%;
+  }
+
+  .workflow-body {
     grid-template-columns: 1fr;
-    text-align: center;
-  }
-
-  .app-landing .hero h1,
-  .app-landing .hero-sub {
-    text-align: center;
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .app-landing .hero-actions {
-    justify-content: center;
-  }
-
-  .app-landing .hero-visual {
-    order: -1;
-  }
-
-  .app-landing .hero-visual img {
-    max-width: 300px;
+    gap: 40px;
   }
 
   .workflow-grid {
-    grid-template-columns: repeat(2, 1fr);
+    max-width: none;
+  }
+
+  .workflow-preview img {
+    max-width: 100%;
   }
 
   .features-split-row {
@@ -796,14 +1044,8 @@ body:has(.app-landing) ::selection {
 }
 
 @media (max-width: 600px) {
-  .workflow-grid {
-    grid-template-columns: 1fr;
-    max-width: 360px;
-    margin: 0 auto;
-  }
-
   .video-section .container {
-    margin-top: -60px;
+    margin-top: -40px;
   }
 
   .video-wrapper {

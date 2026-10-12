@@ -89,7 +89,7 @@
               </div>
               <div class="form-group">
                 <label class="admin-app-label">Nama Pengirim (From Name)</label>
-                <input class="admin-app-input" id="mailSettingsFromName" type="text" placeholder="SoftSale">
+                <input class="admin-app-input" id="mailSettingsFromName" type="text" placeholder="Quick Spot Color">
               </div>
               <div class="form-group">
                 <label class="admin-app-label">Masa Berlaku Link Verifikasi (menit)</label>

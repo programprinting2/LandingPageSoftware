@@ -3,7 +3,7 @@
 
 Halo {{ $name }},
 
-Terima kasih telah mendaftar di **{{ config('softsale.name', 'SoftSale') }}**. Klik tombol di bawah untuk memverifikasi alamat email dan mengaktifkan akun client Anda.
+Terima kasih telah mendaftar di **{{ config('softsale.name', 'Quick Spot Color') }}**. Klik tombol di bawah untuk memverifikasi alamat email dan mengaktifkan akun client Anda.
 
 <x-mail::button :url="$url">
 Verifikasi Email
@@ -16,5 +16,5 @@ Link ini berlaku selama **{{ $expireMinutes }} menit**. Jika tombol tidak berfun
 Jika Anda tidak mendaftar, abaikan email ini.
 
 Salam,<br>
-{{ config('softsale.name', 'SoftSale') }}
+{{ config('softsale.name', 'Quick Spot Color') }}
 </x-mail::message>

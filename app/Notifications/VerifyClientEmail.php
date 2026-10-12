@@ -15,7 +15,7 @@ class VerifyClientEmail extends VerifyEmail
         $verificationUrl = $this->verificationUrl($notifiable);
 
         return (new MailMessage)
-            ->subject('Konfirmasi Email — '.config('softsale.name', 'SoftSale'))
+            ->subject('Konfirmasi Email — '.config('softsale.name', 'Quick Spot Color'))
             ->markdown('emails.client-verify', [
                 'url' => $verificationUrl,
                 'name' => $notifiable->name,

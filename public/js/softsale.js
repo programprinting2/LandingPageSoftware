@@ -58,7 +58,7 @@ function renderPricing() {
   if (!grid) return;
   const items = window.SOFTSALE_DATA?.plans ?? PLANS;
   grid.innerHTML = items.map((p, i) => `
-    <div class="glass price-card ${p.popular ? 'popular' : ''} reveal reveal-delay-${i + 1}">
+    <div class="price-card ${p.popular ? 'popular' : ''} reveal reveal-delay-${i + 1}">
       <h3>${p.name}</h3>
       <div style="margin:16px 0 0;">
         <span class="price-amount">${p.price}</span>

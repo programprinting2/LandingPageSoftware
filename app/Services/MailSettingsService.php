@@ -21,7 +21,7 @@ class MailSettingsService
             'password' => (string) (env('MAIL_PASSWORD') ?? ''),
             'encryption' => env('MAIL_ENCRYPTION') ?: null,
             'from_address' => (string) env('MAIL_FROM_ADDRESS', 'hello@example.com'),
-            'from_name' => (string) env('MAIL_FROM_NAME', config('app.name', 'SoftSale')),
+            'from_name' => (string) env('MAIL_FROM_NAME', config('softsale.name', 'Quick Spot Color')),
             'app_url' => rtrim((string) env('APP_URL', 'http://localhost'), '/'),
             'verification_expire' => (int) env('AUTH_VERIFICATION_EXPIRE', 60),
         ];

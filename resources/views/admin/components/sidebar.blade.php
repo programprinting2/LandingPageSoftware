@@ -1,5 +1,5 @@
 ﻿  <aside class="dash-sidebar">
-    <div class="dash-sidebar-brand"><div class="gradient-text" style="font-size:18px;font-weight:800;">SoftSale</div><span>Admin Panel</span></div>
+    <div class="dash-sidebar-brand"><div class="dash-sidebar-brand-title">{{ $site['name'] ?? 'Quick Spot Color' }}</div><span>Admin Panel</span></div>
     <div class="dash-nav">
       <button class="dash-nav-item active" onclick="switchDashPage('admin','overview',this)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> Dashboard
