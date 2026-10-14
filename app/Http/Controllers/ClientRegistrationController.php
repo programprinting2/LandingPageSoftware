@@ -20,6 +20,7 @@ class ClientRegistrationController extends Controller
             'password' => $validated['password'],
             'company_name' => $validated['company_name'],
             'whatsapp' => $validated['whatsapp'],
+            'application_id' => $validated['application_id'] ?? null,
         ]);
 
         return response()->json([

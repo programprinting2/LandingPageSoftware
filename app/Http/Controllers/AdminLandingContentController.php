@@ -12,11 +12,14 @@ class AdminLandingContentController extends Controller
 {
     public function __construct(private LandingContentService $landingContent) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $applicationId = $request->integer('application_id') ?: null;
+
         return response()->json([
-            'sections' => $this->landingContent->all(),
+            'sections' => $this->landingContent->all($applicationId),
             'keys' => LandingContentService::SECTIONS,
+            'application_id' => $this->landingContent->resolveApplicationId($applicationId),
         ]);
     }
 
@@ -28,13 +31,15 @@ class AdminLandingContentController extends Controller
             ], 404);
         }
 
+        $applicationId = $request->integer('application_id') ?: null;
         $payload = $request->validated()['payload'];
-        $section = $this->landingContent->updateSection($key, $payload);
+        $section = $this->landingContent->updateSection($key, $payload, $applicationId);
 
         return response()->json([
-            'message' => 'Konten halaman utama berhasil disimpan.',
+            'message' => 'Konten landing berhasil disimpan.',
             'section' => $section,
             'key' => $key,
+            'application_id' => $this->landingContent->resolveApplicationId($applicationId),
         ]);
     }
 

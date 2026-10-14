@@ -3,10 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LandingContent extends Model
 {
     protected $fillable = [
+        'application_id',
         'key',
         'payload',
     ];
@@ -16,5 +18,10 @@ class LandingContent extends Model
         return [
             'payload' => 'array',
         ];
+    }
+
+    public function application(): BelongsTo
+    {
+        return $this->belongsTo(Application::class);
     }
 }

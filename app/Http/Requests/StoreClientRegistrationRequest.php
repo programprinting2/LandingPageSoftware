@@ -20,6 +20,7 @@ class StoreClientRegistrationRequest extends FormRequest
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'whatsapp' => ['required', 'string', 'max:20', 'regex:/^08[0-9]{8,13}$/'],
             'password' => ['required', 'string', Password::min(8)],
+            'application_id' => ['nullable', 'integer', 'exists:applications,id'],
         ];
     }
 

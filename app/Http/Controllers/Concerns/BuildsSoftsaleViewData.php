@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Concerns;
 
+use App\Models\Application;
 use App\Services\LandingContentService;
 
 trait BuildsSoftsaleViewData
@@ -16,10 +17,19 @@ trait BuildsSoftsaleViewData
         ];
     }
 
-    protected function softsaleLandingData(LandingContentService $landingContent, string $appMode): array
-    {
-        return array_merge($landingContent->landingDataPayload(), [
+    protected function softsaleLandingData(
+        LandingContentService $landingContent,
+        string $appMode,
+        ?Application $application = null,
+        bool $atHomeRoot = true,
+    ): array {
+        $payload = $application
+            ? $landingContent->landingDataPayloadForApplication($application)
+            : $landingContent->landingDataPayload();
+
+        return array_merge($payload, [
             'appMode' => $appMode,
+            'atHomeRoot' => $atHomeRoot,
             'landingUrl' => route('landing'),
             'adminDashboardUrl' => route('dashboard.admin'),
             'clientDashboardUrl' => route('dashboard.client'),
@@ -42,9 +52,13 @@ trait BuildsSoftsaleViewData
             'adminPaymentOrdersUrl' => route('admin.payment-orders.index'),
             'adminLandingContentUrl' => route('admin.landing-content.index'),
             'adminLandingImageUploadUrl' => route('admin.landing-content.upload-image'),
+            'adminHomepageSettingsUrl' => route('admin.homepage-settings.show'),
+            'adminHubContentUrl' => route('admin.hub-content.index'),
             'adminMailSettingsUrl' => route('admin.mail-settings.show'),
             'adminMailSettingsTestUrl' => route('admin.mail-settings.test'),
-            'liveEditUrl' => route('landing', ['live_edit' => 1]),
+            'liveEditUrl' => $application
+                ? route('landing.application', ['slug' => $application->slug, 'live_edit' => 1])
+                : route('landing', ['live_edit' => 1]),
         ]);
     }
 }

@@ -23,8 +23,11 @@
   adminPaymentOrdersUrl = '/api/admin/payment-orders',
   adminLandingContentUrl = '/api/admin/landing-content',
   adminLandingImageUploadUrl = '/api/admin/landing-content/upload-image',
+  adminHomepageSettingsUrl = '/api/admin/homepage-settings',
+  adminHubContentUrl = '/api/admin/hub-content',
   adminMailSettingsUrl = '/api/admin/mail-settings',
   adminMailSettingsTestUrl = '/api/admin/mail-settings/test',
+  application: landingApplication = null,
 } = window.SOFTSALE_DATA || {};
 
 let appDialogResolver = null;
@@ -42,6 +45,10 @@ let adminPaymentOrdersSearchTimer = null;
 let adminTransactionsActiveTab = 'ledger';
 let adminSettingsActiveTab = 'email';
 let adminLandingCmsCache = {};
+let adminLandingCmsApplicationId = null;
+let adminHomepageSettingsCache = {};
+let adminHubContentCache = {};
+let adminApplicationsListCache = [];
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // SVG HELPER
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -647,7 +654,10 @@ function applyDashboardRoute(portal, page) {
     if (adminTransactionsActiveTab === 'invoices') refreshAdminPaymentOrdersTable();
   }
   if (portal === 'admin' && page === 'overview') renderRevenueBars();
-  if (portal === 'admin' && page === 'landing-cms') refreshAdminLandingCms();
+  if (portal === 'admin' && page === 'homepage') refreshAdminHomepage();
+  if (portal === 'admin' && page === 'landing-cms') {
+    populateAdminLandingApplicationSelect().then(() => refreshAdminLandingCms());
+  }
   if (portal === 'admin' && page === 'settings') {
     switchAdminSettingsTab(adminSettingsActiveTab);
     if (adminSettingsActiveTab === 'email') refreshAdminMailSettings();
@@ -801,6 +811,9 @@ async function submitClientRegistration(event) {
     whatsapp: document.getElementById('registerWhatsapp')?.value.trim(),
     password: document.getElementById('registerPassword')?.value,
   };
+  if (landingApplication?.id) {
+    payload.application_id = landingApplication.id;
+  }
 
   btn.disabled = true;
   btn.textContent = 'Memproses...';
@@ -3164,27 +3177,305 @@ function renderAdminLandingCmsForms() {
   Object.entries(adminLandingCmsCache).forEach(([key, section]) => fillAdminLandingSectionFields(section, key));
 }
 
-async function refreshAdminLandingCms() {
+async function fetchAdminApplicationsList() {
+  if (adminApplicationsListCache.length) {
+    return adminApplicationsListCache;
+  }
   try {
-    const response = await fetch(adminLandingContentUrl, {
+    const response = await fetch(adminApplicationsUrl, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     });
     const data = await response.json();
     if (!response.ok) {
-      showAdminLandingAlert(data.message || 'Gagal memuat CMS halaman utama.', 'error');
+      return [];
+    }
+    adminApplicationsListCache = (data.applications || []).filter((app) => app.is_active !== false);
+    return adminApplicationsListCache;
+  } catch {
+    return [];
+  }
+}
+
+function updateAdminLandingPreviewLinks() {
+  const preview = document.getElementById('adminLandingPreviewLink');
+  const liveEdit = document.getElementById('adminLandingLiveEditLink');
+  if (!preview || !liveEdit) return;
+  const app = adminApplicationsListCache.find((item) => Number(item.id) === Number(adminLandingCmsApplicationId));
+  const base = app?.slug ? `/apps/${app.slug}` : landingUrl;
+  preview.href = base;
+  liveEdit.href = `${base}?live_edit=1`;
+}
+
+async function populateAdminLandingApplicationSelect() {
+  const select = document.getElementById('adminLandingApplicationSelect');
+  if (!select) return;
+  const apps = await fetchAdminApplicationsList();
+  select.innerHTML = apps.map((app) => `<option value="${app.id}">${escapeHtml(app.name)}</option>`).join('');
+  if (!apps.length) {
+    select.innerHTML = '<option value="">—</option>';
+    return;
+  }
+  if (!adminLandingCmsApplicationId) {
+    adminLandingCmsApplicationId = Number(apps[0].id);
+  }
+  select.value = String(adminLandingCmsApplicationId);
+  updateAdminLandingPreviewLinks();
+}
+
+function onAdminLandingApplicationChange() {
+  const select = document.getElementById('adminLandingApplicationSelect');
+  adminLandingCmsApplicationId = select?.value ? Number(select.value) : null;
+  updateAdminLandingPreviewLinks();
+  refreshAdminLandingCms();
+}
+
+function showAdminHomepageAlert(message, type = 'success') {
+  const el = document.getElementById('adminHomepageAlert');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.toggle('is-error', type === 'error');
+  el.classList.toggle('is-success', type !== 'error');
+}
+
+function syncHomepageModePanels() {
+  const mode = document.querySelector('input[name="homepageMode"]:checked')?.value || 'application';
+  const appField = document.getElementById('homepageApplicationField');
+  const hubPanel = document.getElementById('homepageHubPanel');
+  const landingPanel = document.getElementById('homepageLandingPanel');
+  if (appField) appField.hidden = mode !== 'application';
+  if (hubPanel) hubPanel.hidden = mode !== 'default';
+  if (landingPanel) landingPanel.hidden = mode !== 'application';
+
+  if (mode === 'default') {
+    refreshAdminHubContent();
+  }
+
+  const select = document.getElementById('homepageApplicationSelect');
+  const app = adminApplicationsListCache.find((item) => Number(item.id) === Number(select?.value));
+  const summary = document.getElementById('homepageLandingSummary');
+  if (summary && app) {
+    summary.textContent = `Homepage = landing ${app.name} (/apps/${app.slug} atau / jika dipilih di switcher).`;
+  }
+}
+
+function fillAdminHubContentForms() {
+  const site = adminHubContentCache.hub_site || {};
+  const hero = adminHubContentCache.hub_hero || {};
+  const catalog = adminHubContentCache.hub_catalog || {};
+  const footer = adminHubContentCache.hub_footer || {};
+
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val ?? '';
+  };
+
+  set('hubSiteBrand', site.brand);
+  set('hubSiteTagline', site.tagline);
+  set('hubSiteNavLogin', site.nav_login);
+  set('hubSiteNavRegister', site.nav_register);
+  set('hubHeroBadge', hero.badge);
+  set('hubHeroTitle', hero.title);
+  set('hubHeroSubtitle', hero.subtitle);
+  set('hubCatalogTitle', catalog.title);
+  set('hubCatalogSubtitle', catalog.subtitle);
+  set('hubCatalogEmpty', catalog.empty_text);
+  set('hubFooterDescription', footer.description);
+  set('hubFooterProductsTitle', footer.products_title);
+  set('hubFooterAccountTitle', footer.account_title);
+  set('hubFooterCopyright', footer.copyright);
+}
+
+async function refreshAdminHubContent() {
+  if (!adminHubContentUrl) return;
+  try {
+    const response = await fetch(adminHubContentUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      showAdminHomepageAlert(data.message || 'Gagal memuat konten portal.', 'error');
+      return;
+    }
+    adminHubContentCache = data.sections || {};
+    fillAdminHubContentForms();
+  } catch {
+    showAdminHomepageAlert('Gagal memuat konten portal.', 'error');
+  }
+}
+
+function collectAdminHubSectionPayload(key) {
+  if (key === 'hub_site') {
+    return {
+      brand: document.getElementById('hubSiteBrand')?.value?.trim() || '',
+      tagline: document.getElementById('hubSiteTagline')?.value?.trim() || '',
+      nav_login: document.getElementById('hubSiteNavLogin')?.value?.trim() || '',
+      nav_register: document.getElementById('hubSiteNavRegister')?.value?.trim() || '',
+    };
+  }
+  if (key === 'hub_hero') {
+    return {
+      badge: document.getElementById('hubHeroBadge')?.value?.trim() || '',
+      title: document.getElementById('hubHeroTitle')?.value?.trim() || '',
+      subtitle: document.getElementById('hubHeroSubtitle')?.value?.trim() || '',
+    };
+  }
+  if (key === 'hub_catalog') {
+    return {
+      title: document.getElementById('hubCatalogTitle')?.value?.trim() || '',
+      subtitle: document.getElementById('hubCatalogSubtitle')?.value?.trim() || '',
+      empty_text: document.getElementById('hubCatalogEmpty')?.value?.trim() || '',
+    };
+  }
+  if (key === 'hub_footer') {
+    return {
+      description: document.getElementById('hubFooterDescription')?.value?.trim() || '',
+      products_title: document.getElementById('hubFooterProductsTitle')?.value?.trim() || '',
+      account_title: document.getElementById('hubFooterAccountTitle')?.value?.trim() || '',
+      copyright: document.getElementById('hubFooterCopyright')?.value?.trim() || '',
+    };
+  }
+  return {};
+}
+
+async function saveAdminHubSection(key) {
+  const payload = collectAdminHubSectionPayload(key);
+  try {
+    const response = await fetch(`${adminHubContentUrl}/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ payload }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const firstError = data.errors ? Object.values(data.errors).flat()[0] : null;
+      showAdminHomepageAlert(firstError || data.message || 'Gagal menyimpan.', 'error');
+      return;
+    }
+    adminHubContentCache[key] = data.section || payload;
+    showAdminHomepageAlert(data.message || 'Konten portal disimpan.');
+  } catch {
+    showAdminHomepageAlert('Gagal menyimpan konten portal.', 'error');
+  }
+}
+
+async function refreshAdminHomepage() {
+  const apps = await fetchAdminApplicationsList();
+  const appSelect = document.getElementById('homepageApplicationSelect');
+  if (appSelect) {
+    appSelect.innerHTML = apps.map((app) => `<option value="${app.id}">${escapeHtml(app.name)}</option>`).join('');
+  }
+
+  try {
+    const response = await fetch(adminHomepageSettingsUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      showAdminHomepageAlert(data.message || 'Gagal memuat pengaturan homepage.', 'error');
+      return;
+    }
+    adminHomepageSettingsCache = data.settings || {};
+    const mode = adminHomepageSettingsCache.mode === 'default' ? 'default' : 'application';
+    const defaultRadio = document.getElementById('homepageModeDefault');
+    const appRadio = document.getElementById('homepageModeApplication');
+    if (defaultRadio) defaultRadio.checked = mode === 'default';
+    if (appRadio) appRadio.checked = mode === 'application';
+    if (appSelect && adminHomepageSettingsCache.application_id) {
+      appSelect.value = String(adminHomepageSettingsCache.application_id);
+    }
+    syncHomepageModePanels();
+  } catch {
+    showAdminHomepageAlert('Gagal memuat pengaturan homepage.', 'error');
+  }
+
+  document.querySelectorAll('input[name="homepageMode"]').forEach((input) => {
+    input.onchange = () => syncHomepageModePanels();
+  });
+  document.getElementById('homepageApplicationSelect')?.addEventListener('change', syncHomepageModePanels);
+}
+
+async function saveAdminHomepageSettings() {
+  const mode = document.querySelector('input[name="homepageMode"]:checked')?.value || 'application';
+  const applicationId = document.getElementById('homepageApplicationSelect')?.value || null;
+  const btn = document.getElementById('homepageSettingsSaveBtn');
+  if (btn) {
+    btn.disabled = true;
+  }
+  try {
+    const response = await fetch(adminHomepageSettingsUrl, {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        mode,
+        application_id: mode === 'application' ? Number(applicationId) : null,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      showAdminHomepageAlert(data.message || 'Gagal menyimpan homepage.', 'error');
+      return;
+    }
+    adminHomepageSettingsCache = data.settings || {};
+    showAdminHomepageAlert(data.message || 'Pengaturan homepage disimpan.');
+    syncHomepageModePanels();
+  } catch {
+    showAdminHomepageAlert('Gagal menyimpan homepage.', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function openAdminLandingFromHomepage() {
+  const appId = document.getElementById('homepageApplicationSelect')?.value;
+  if (appId) {
+    adminLandingCmsApplicationId = Number(appId);
+  }
+  switchDashPage('admin', 'landing-cms');
+}
+
+async function refreshAdminLandingCms() {
+  try {
+    await populateAdminLandingApplicationSelect();
+    const query = adminLandingCmsApplicationId ? `?application_id=${adminLandingCmsApplicationId}` : '';
+    const response = await fetch(`${adminLandingContentUrl}${query}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      showAdminLandingAlert(data.message || 'Gagal memuat CMS landing.', 'error');
       return;
     }
     adminLandingCmsCache = data.sections || {};
+    if (data.application_id) {
+      adminLandingCmsApplicationId = Number(data.application_id);
+      const select = document.getElementById('adminLandingApplicationSelect');
+      if (select) select.value = String(adminLandingCmsApplicationId);
+    }
     renderAdminLandingCmsForms();
   } catch {
-    showAdminLandingAlert('Gagal memuat CMS halaman utama.', 'error');
+    showAdminLandingAlert('Gagal memuat CMS landing.', 'error');
   }
 }
 
 async function persistLandingSection(key, payload) {
   try {
-    const response = await fetch(`${adminLandingContentUrl}/${encodeURIComponent(key)}`, {
+    const query = adminLandingCmsApplicationId ? `?application_id=${adminLandingCmsApplicationId}` : '';
+    const response = await fetch(`${adminLandingContentUrl}/${encodeURIComponent(key)}${query}`, {
       method: 'PUT',
       headers: {
         Accept: 'application/json',

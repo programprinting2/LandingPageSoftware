@@ -31,7 +31,8 @@ class ClientAuthService
                 'devices_max' => config('spotcolor.devices_max', 3),
             ]);
 
-            $this->assignDefaultTrialLicense($client);
+            $applicationId = isset($data['application_id']) ? (int) $data['application_id'] : null;
+            $this->assignDefaultTrialLicense($client, $applicationId);
 
             $user->sendEmailVerificationNotification();
 
@@ -196,15 +197,25 @@ class ClientAuthService
         );
     }
 
-    private function assignDefaultTrialLicense(Client $client): void
+    private function assignDefaultTrialLicense(Client $client, ?int $applicationId = null): void
     {
-        $applicationSlug = (string) config('softsale.default_application_slug', 'spot-color');
         $trialPackageName = strtolower((string) config('softsale.default_trial_package_name', 'trial'));
 
-        $application = Application::query()
-            ->where('slug', $applicationSlug)
-            ->where('is_active', true)
-            ->first();
+        $application = null;
+        if ($applicationId) {
+            $application = Application::query()
+                ->where('id', $applicationId)
+                ->where('is_active', true)
+                ->first();
+        }
+
+        if (! $application) {
+            $applicationSlug = (string) config('softsale.default_application_slug', 'spot-color');
+            $application = Application::query()
+                ->where('slug', $applicationSlug)
+                ->where('is_active', true)
+                ->first();
+        }
 
         if (! $application) {
             return;

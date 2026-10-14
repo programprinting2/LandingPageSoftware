@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Application;
 use App\Models\LandingContent;
 
 class LandingContentService
@@ -16,6 +17,8 @@ class LandingContentService
         'faq',
         'footer',
     ];
+
+    public function __construct(private LandingPricingService $landingPricing) {}
 
     public function defaults(): array
     {
@@ -54,6 +57,7 @@ class LandingContentService
                 'title' => 'Pilih Paket yang Tepat',
                 'subtitle' => 'Mulai gratis, upgrade kapan saja sesuai kebutuhan produksi Anda.',
                 'items' => config('softsale.plans', []),
+                'package_overrides' => [],
             ],
             'faq' => [
                 'title' => 'Pertanyaan Umum',
@@ -67,10 +71,13 @@ class LandingContentService
         ];
     }
 
-    public function all(): array
+    public function all(?int $applicationId = null): array
     {
+        $applicationId = $this->resolveApplicationId($applicationId);
         $defaults = $this->defaults();
-        $stored = LandingContent::query()->pluck('payload', 'key');
+        $stored = LandingContent::query()
+            ->where('application_id', $applicationId)
+            ->pluck('payload', 'key');
 
         $merged = [];
         foreach ($defaults as $key => $default) {
@@ -83,7 +90,7 @@ class LandingContentService
         return $merged;
     }
 
-    public function section(string $key): array
+    public function section(string $key, ?int $applicationId = null): array
     {
         $defaults = $this->defaults();
 
@@ -91,7 +98,12 @@ class LandingContentService
             return [];
         }
 
-        $record = LandingContent::query()->where('key', $key)->first();
+        $applicationId = $this->resolveApplicationId($applicationId);
+
+        $record = LandingContent::query()
+            ->where('application_id', $applicationId)
+            ->where('key', $key)
+            ->first();
         $payload = $record?->payload;
 
         return is_array($payload)
@@ -99,34 +111,78 @@ class LandingContentService
             : $defaults[$key];
     }
 
-    public function updateSection(string $key, array $payload): array
+    public function updateSection(string $key, array $payload, ?int $applicationId = null): array
     {
         if (! in_array($key, self::SECTIONS, true)) {
             abort(404);
         }
 
+        $applicationId = $this->resolveApplicationId($applicationId);
+
         LandingContent::query()->updateOrCreate(
-            ['key' => $key],
+            [
+                'application_id' => $applicationId,
+                'key' => $key,
+            ],
             ['payload' => $payload],
         );
 
-        return $this->section($key);
+        return $this->section($key, $applicationId);
     }
 
-    public function landingDataPayload(): array
+    /**
+     * @return array<string, mixed>
+     */
+    public function landingDataPayloadForApplication(Application $application): array
     {
-        $cms = $this->all();
+        $cms = $this->all($application->id);
+        $application->loadMissing('packages');
 
         return [
             'site' => $cms['site'],
             'hero' => $cms['hero'],
-            'plans' => $cms['pricing']['items'] ?? [],
+            'plans' => $this->landingPricing->buildPlans($application, $cms['pricing'] ?? []),
             'pricingSection' => [
                 'badge' => $cms['pricing']['badge'] ?? '',
                 'title' => $cms['pricing']['title'] ?? '',
                 'subtitle' => $cms['pricing']['subtitle'] ?? '',
             ],
             'footer' => $cms['footer'],
+            'application' => [
+                'id' => $application->id,
+                'name' => $application->name,
+                'slug' => $application->slug,
+            ],
         ];
+    }
+
+    public function landingDataPayload(?int $applicationId = null): array
+    {
+        $applicationId = $this->resolveApplicationId($applicationId);
+        $application = Application::query()->with('packages')->findOrFail($applicationId);
+
+        return $this->landingDataPayloadForApplication($application);
+    }
+
+    public function resolveApplicationId(?int $applicationId): int
+    {
+        if ($applicationId) {
+            return $applicationId;
+        }
+
+        $slug = (string) config('softsale.default_application_slug', 'spot-color');
+        $id = Application::query()->where('slug', $slug)->value('id');
+
+        if ($id) {
+            return (int) $id;
+        }
+
+        $fallback = Application::query()->orderBy('sort_order')->orderBy('id')->value('id');
+
+        if (! $fallback) {
+            abort(503, 'Belum ada aplikasi aktif.');
+        }
+
+        return (int) $fallback;
     }
 }

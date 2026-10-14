@@ -6,6 +6,8 @@ use App\Http\Controllers\AdminMailSettingsController;
 use App\Http\Controllers\AdminApplicationController;
 use App\Http\Controllers\AdminClientController;
 use App\Http\Controllers\AdminLicenseController;
+use App\Http\Controllers\AdminHomepageSettingsController;
+use App\Http\Controllers\AdminHubContentController;
 use App\Http\Controllers\AdminLandingContentController;
 use App\Http\Controllers\AdminPaymentOrderController;
 use App\Http\Controllers\AdminTransactionController;
@@ -18,6 +20,7 @@ use App\Http\Controllers\LandingController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LandingController::class, 'index'])->name('landing');
+Route::get('/apps/{slug}', [LandingController::class, 'application'])->name('landing.application');
 Route::get('/admin', [DashboardController::class, 'admin'])->name('dashboard.admin');
 Route::get('/client', [DashboardController::class, 'client'])->name('dashboard.client');
 Route::get('/affiliate', [DashboardController::class, 'affiliate'])->name('dashboard.affiliate');
@@ -64,6 +67,12 @@ Route::get('/api/admin/payment-orders', [AdminPaymentOrderController::class, 'in
 Route::get('/api/admin/mail-settings', [AdminMailSettingsController::class, 'show'])->name('admin.mail-settings.show');
 Route::put('/api/admin/mail-settings', [AdminMailSettingsController::class, 'update'])->name('admin.mail-settings.update');
 Route::post('/api/admin/mail-settings/test', [AdminMailSettingsController::class, 'sendTest'])->name('admin.mail-settings.test');
+
+Route::get('/api/admin/homepage-settings', [AdminHomepageSettingsController::class, 'show'])->name('admin.homepage-settings.show');
+Route::put('/api/admin/homepage-settings', [AdminHomepageSettingsController::class, 'update'])->name('admin.homepage-settings.update');
+
+Route::get('/api/admin/hub-content', [AdminHubContentController::class, 'index'])->name('admin.hub-content.index');
+Route::put('/api/admin/hub-content/{key}', [AdminHubContentController::class, 'update'])->name('admin.hub-content.update');
 
 Route::get('/api/admin/landing-content', [AdminLandingContentController::class, 'index'])->name('admin.landing-content.index');
 Route::post('/api/admin/landing-content/upload-image', [AdminLandingContentController::class, 'uploadImage'])->name('admin.landing-content.upload-image');

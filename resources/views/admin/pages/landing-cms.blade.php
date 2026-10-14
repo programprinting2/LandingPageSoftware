@@ -1,12 +1,16 @@
     <div id="admin-landing-cms" class="dash-page">
       <div class="dash-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;">
         <div>
-          <h1>Halaman Utama</h1>
-          <p>Kelola konten landing page — hero, workflow, fitur, harga, FAQ, dan footer.</p>
+          <h1>Landing Aplikasi</h1>
+          <p>Konten landing per produk — hero, workflow, FAQ, overlay harga. Harga angka dari Master Aplikasi.</p>
         </div>
-        <div style="display:flex;gap:10px;flex-shrink:0;flex-wrap:wrap;">
-          <a href="{{ route('landing', ['live_edit' => 1]) }}" target="_blank" rel="noopener" class="btn btn-primary">Edit Live</a>
-          <a href="{{ route('landing') }}" target="_blank" rel="noopener" class="btn btn-secondary">Preview Situs</a>
+        <div style="display:flex;gap:10px;flex-shrink:0;flex-wrap:wrap;align-items:flex-end;">
+          <div class="form-group" style="margin:0;min-width:200px;">
+            <label class="admin-app-label" for="adminLandingApplicationSelect">Aplikasi</label>
+            <select class="admin-app-input" id="adminLandingApplicationSelect" onchange="onAdminLandingApplicationChange()"></select>
+          </div>
+          <a href="{{ route('landing') }}" id="adminLandingPreviewLink" target="_blank" rel="noopener" class="btn btn-secondary">Preview</a>
+          <a href="{{ route('landing') }}" id="adminLandingLiveEditLink" target="_blank" rel="noopener" class="btn btn-primary">Edit Live</a>
         </div>
       </div>
 
@@ -65,7 +69,7 @@
           </section>
 
           <section class="admin-app-panel" data-panel="pricing">
-            <div class="admin-app-panel-head"><h4>Harga</h4><p>Section header dan paket harga tampilan</p></div>
+            <div class="admin-app-panel-head"><h4>Harga</h4><p>Judul section + fitur/populer per paket. Nama, harga, dan periode diambil otomatis dari Master Aplikasi → Detail Paket.</p></div>
             <div class="admin-app-panel-body">
               <div class="form-group"><label class="admin-app-label">Badge</label><input class="admin-app-input cms-section-badge" data-section="pricing" type="text"></div>
               <div class="form-group"><label class="admin-app-label">Judul</label><input class="admin-app-input cms-section-title" data-section="pricing" type="text"></div>

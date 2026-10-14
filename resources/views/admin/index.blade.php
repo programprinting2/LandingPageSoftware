@@ -9,6 +9,7 @@
         @include('admin.pages.affiliates')
         @include('admin.pages.commissions')
         @include('admin.pages.transactions')
+        @include('admin.pages.homepage')
         @include('admin.pages.landing-cms')
         @include('admin.pages.revenue')
         @include('admin.pages.settings')
