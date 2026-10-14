@@ -5,7 +5,6 @@
     </div>
     <div class="nav-links" id="navLinks">
       <button class="nav-link" onclick="scrollToSection('cara-kerja')">Cara Kerja</button>
-      <button class="nav-link" onclick="scrollToSection('fitur')">Fitur</button>
       <button class="nav-link" onclick="scrollToSection('harga')">Harga</button>
       <button class="nav-link" onclick="scrollToSection('faq')">FAQ</button>
     </div>

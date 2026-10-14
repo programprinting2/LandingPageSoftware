@@ -60,7 +60,7 @@ function renderPricing() {
   grid.innerHTML = items.map((p, i) => `
     <div class="price-card ${p.popular ? 'popular' : ''} reveal reveal-delay-${i + 1}">
       <h3>${p.name}</h3>
-      <div style="margin:16px 0 0;">
+      <div class="price-amount-wrap">
         <span class="price-amount">${p.price}</span>
         <span class="price-period">${p.period}</span>
       </div>
@@ -110,7 +110,7 @@ function scrollToSection(id) {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // NAV SCROLL EFFECT + ACTIVE LINK
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-const sectionIds = ['cara-kerja', 'fitur', 'harga', 'faq'];
+const sectionIds = ['cara-kerja', 'harga', 'faq'];
 
 function updateNav() {
   const nav = document.getElementById('navbar');
@@ -2214,7 +2214,7 @@ function addAdminApplicationPackageRow(pkg = {}) {
   row.innerHTML = `
     <td><input class="admin-app-input pkg-name" type="text" placeholder="Trial / Basic / Pro" value="${escapeHtml(pkg.name || '')}"></td>
     <td class="pkg-quota-cell"><input class="admin-app-input pkg-quota" type="number" min="1" max="999" value="${Number(pkg.devices_quota ?? 1)}" required></td>
-    <td>
+    <td class="pkg-days-cell">
       <div class="pkg-days-wrap${isUnlimited ? ' is-unlimited' : ''}">
         <input class="admin-app-input pkg-days" type="number" min="1" max="36500" value="${daysValue}" ${isUnlimited ? 'disabled' : ''}>
         <span class="pkg-unlimited-label" title="Unlimited">∞</span>

@@ -7,7 +7,6 @@
       </div>
       <div>
         <div class="footer-col-title">Produk</div>
-        <span class="footer-link" onclick="scrollToSection('fitur')">Fitur</span>
         <span class="footer-link" onclick="scrollToSection('harga')">Harga</span>
         <span class="footer-link" onclick="scrollToSection('cara-kerja')">Cara Kerja</span>
         <span class="footer-link" onclick="scrollToSection('faq')">FAQ</span>

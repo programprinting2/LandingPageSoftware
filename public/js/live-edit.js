@@ -2,7 +2,6 @@ const LIVE_EDIT_TARGETS = [
   { key: 'site', selector: '#navbar', label: 'Brand / Umum' },
   { key: 'hero', selector: '#hero', label: 'Hero' },
   { key: 'workflow', selector: '#cara-kerja', label: 'Workflow' },
-  { key: 'features', selector: '#fitur', label: 'Fitur' },
   { key: 'pricing', selector: '#harga', label: 'Harga' },
   { key: 'faq', selector: '#faq', label: 'FAQ' },
   { key: 'footer', selector: '.footer', label: 'Footer' },
@@ -30,10 +29,6 @@ function liveEditFormHtml(key) {
         <div class="form-group"><label class="admin-app-label">Tombol Utama</label><input class="admin-app-input" id="cmsHeroCtaPrimary" type="text"></div>
         <div class="form-group"><label class="admin-app-label">Tombol Sekunder</label><input class="admin-app-input" id="cmsHeroCtaSecondary" type="text"></div>
       </div>`,
-    features: `
-      <div class="form-group"><label class="admin-app-label">Judul Section</label><input class="admin-app-input cms-section-title" data-section="features" type="text"></div>
-      <div class="admin-cms-repeat-head"><strong>Item Fitur</strong><button type="button" class="btn btn-secondary" style="padding:6px 12px;font-size:11px;" onclick="addAdminLandingFeatureRow()">+ Fitur</button></div>
-      <div id="cmsFeaturesItems" class="admin-cms-items"></div>`,
     pricing: `
       <div class="form-group"><label class="admin-app-label">Badge</label><input class="admin-app-input cms-section-badge" data-section="pricing" type="text"></div>
       <div class="form-group"><label class="admin-app-label">Judul</label><input class="admin-app-input cms-section-title" data-section="pricing" type="text"></div>
@@ -134,12 +129,6 @@ function applyLiveEditToPage(key, section) {
     if (primaryBtn) primaryBtn.textContent = section.cta_primary || '';
     const secondaryBtn = hero.querySelector('.hero-actions .btn-secondary');
     if (secondaryBtn) secondaryBtn.textContent = section.cta_secondary || '';
-    return;
-  }
-
-  if (key === 'features') {
-    const header = document.querySelector('.features-split-header h2');
-    if (header) header.textContent = section.title || '';
     return;
   }
 

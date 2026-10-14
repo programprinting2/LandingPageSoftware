@@ -188,8 +188,9 @@ section[id] { scroll-margin-top: 76px; }
   padding: 4px 38px; transform: rotate(45deg); letter-spacing: 1.5px;
 }
 .price-card h3 { font-size: 20px; font-weight: 800; color: var(--text-1); margin-bottom: 6px; }
-.price-amount { font-size: 34px; font-weight: 800; color: var(--text-1); }
-.price-period { font-size: 14px; color: var(--text-3); font-weight: 500; }
+.price-amount-wrap { margin-top: 16px; margin-bottom: 4px; }
+.price-amount { display: block; font-size: 34px; font-weight: 800; color: var(--text-1); line-height: 1.15; }
+.price-period { display: block; font-size: 14px; color: var(--text-3); font-weight: 500; margin-top: 6px; }
 .price-features { margin: 24px 0; display: flex; flex-direction: column; gap: 12px; }
 .price-feat {
   display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--text-2);
@@ -885,7 +886,7 @@ select.admin-app-input {
   cursor: pointer;
 }
 .admin-app-packages-table-wrap { overflow-x: auto; width: 100%; }
-.admin-app-packages-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
+.admin-app-packages-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
 .admin-app-packages-table th {
   text-align: left;
   padding: 10px 8px;
@@ -901,7 +902,7 @@ select.admin-app-input {
 .admin-app-packages-table .admin-app-input { padding: 8px 10px; font-size: 13px; min-width: 0; width: 100%; box-sizing: border-box; }
 .admin-app-packages-table col.col-pkg-name { width: 16%; }
 .admin-app-packages-table col.col-pkg-quota { width: 88px; }
-.admin-app-packages-table col.col-pkg-days { width: 128px; }
+.admin-app-packages-table col.col-pkg-days { width: 140px; }
 .admin-app-packages-table col.col-pkg-price { width: 168px; }
 .admin-app-packages-table col.col-pkg-discount { width: 92px; }
 .admin-app-packages-table col.col-pkg-commission-fixed { width: 22%; }
@@ -909,6 +910,11 @@ select.admin-app-input {
 .admin-app-packages-table col.col-pkg-actions { width: 36px; }
 .admin-app-packages-table .pkg-name { min-width: 0; }
 .admin-app-packages-table td.pkg-quota-cell { min-width: 88px; width: 88px; }
+.admin-app-packages-table th.col-pkg-days-head,
+.admin-app-packages-table td.pkg-days-cell {
+  min-width: 140px;
+  width: 140px;
+}
 .admin-app-packages-table td.pkg-price-cell { min-width: 168px; }
 .admin-app-packages-table td.pkg-commission-fixed-cell { min-width: 132px; }
 .admin-app-packages-table .pkg-quota {
@@ -973,13 +979,18 @@ select.admin-app-input {
 }
 .admin-app-packages-empty[hidden] { display: none; }
 .pkg-days-wrap {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
-  max-width: 112px;
+  min-width: 0;
 }
-.pkg-days-wrap .pkg-days { width: 100%; max-width: 72px; flex: 1 1 auto; }
+.admin-app-packages-table td.pkg-days-cell .pkg-days {
+  min-width: 56px;
+  max-width: none;
+  flex: 1 1 auto;
+  width: auto;
+}
 .pkg-unlimited-label {
   display: none;
   min-width: 72px;

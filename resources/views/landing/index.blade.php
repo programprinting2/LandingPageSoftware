@@ -4,7 +4,6 @@
     @include('landing.components.hero')
     @include('landing.components.video-showcase')
     @include('landing.components.workflow')
-    @include('landing.components.features')
     @include('landing.components.pricing')
     @include('landing.components.faq')
     @include('landing.components.footer')

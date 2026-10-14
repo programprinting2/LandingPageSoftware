@@ -122,7 +122,7 @@
                         <tr>
                           <th>Nama Paket</th>
                           <th class="col-pkg-quota-head">Limit</th>
-                          <th>Hari</th>
+                          <th class="col-pkg-days-head">Hari</th>
                           <th class="col-pkg-price-head">Harga</th>
                           <th class="col-pkg-discount-head">Discount %</th>
                           <th class="col-pkg-commission-fixed-head">Komisi Rp</th>

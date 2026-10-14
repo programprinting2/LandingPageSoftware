@@ -20,6 +20,7 @@
   --radius-sm:  10px;
   --radius-btn: 8px;
   --shadow-card: 0 4px 24px rgba(15, 23, 42, 0.06);
+  --hero-visual-max: 1300px;
 }
 
 html:has(.app-landing),
@@ -469,7 +470,8 @@ body:has(.app-landing) ::selection {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100%;
+  width: min(calc(100vw - 32px), var(--hero-visual-max));
+  max-width: var(--hero-visual-max);
   margin: 0;
 }
 
@@ -484,15 +486,10 @@ body:has(.app-landing) ::selection {
    VIDEO SHOWCASE
    ═══════════════════════════════════════════════════════════════ */
 .video-section {
-  padding: 0 0 80px;
+  padding: 72px 0 100px;
   margin-top: 0;
   background: transparent;
   position: relative;
-  z-index: 2;
-}
-
-.video-section .container {
-  margin-top: -80px;
 }
 
 .video-wrapper {
@@ -570,7 +567,7 @@ body:has(.app-landing) ::selection {
    WORKFLOW
    ═══════════════════════════════════════════════════════════════ */
 .workflow-section {
-  padding: 140px 0 100px;
+  padding: 72px 0 100px;
   background: var(--white);
 }
 
@@ -839,10 +836,6 @@ body:has(.app-landing) ::selection {
   background: var(--bg-main);
 }
 
-.app-landing #fitur + .pricing-section {
-  margin-top: -24px;
-}
-
 .app-landing .badge-label {
   background: rgba(255, 85, 0, 0.1);
   color: var(--orange);
@@ -1066,10 +1059,6 @@ body:has(.app-landing) ::selection {
 }
 
 @media (max-width: 600px) {
-  .video-section .container {
-    margin-top: -40px;
-  }
-
   .video-wrapper {
     aspect-ratio: 16 / 9;
   }
