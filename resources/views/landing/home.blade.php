@@ -7,6 +7,7 @@
 @section('content')
     @include('landing.index')
     @include('shared.components.auth-modal')
+    @include('shared.components.checkout-modal')
     @include('shared.components.app-dialog')
     @if(!empty($liveEdit))
         @include('landing.components.live-edit')

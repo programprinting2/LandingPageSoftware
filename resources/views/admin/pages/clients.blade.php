@@ -1,55 +1,91 @@
-﻿    <div id="admin-clients" class="dash-page">
-      <div class="dash-header"><h1>Manajemen Client</h1><p>Kelola semua client terdaftar</p></div>
+﻿    <div id="admin-users" class="dash-page">
+      <div class="dash-header"><h1>Manajemen User</h1><p>Semua akun — client mengaktifkan affiliate sendiri dari portal client</p></div>
       <div class="dash-table-wrap">
         <div class="dash-table-header">
-          <h3 id="adminClientsCount">{{ $clients->count() }} client terdaftar</h3>
+          <h3 id="adminUsersCount">{{ ($users ?? collect())->count() }} user terdaftar</h3>
           <button type="button" class="btn btn-primary" style="padding:8px 16px;font-size:12px;" onclick="openAdminClientModal()">+ Tambah Client</button>
         </div>
-        <table class="dash-table">
+        <table class="dash-table admin-users-table">
           <thead>
             <tr>
-              <th>Nama Perusahaan</th>
-              <th>Kontak</th>
+              <th>Nama akun</th>
               <th>Email</th>
+              <th>Role</th>
               <th>Aplikasi</th>
               <th>WhatsApp</th>
-              <th>Status</th>
+              <th>Status Client</th>
+              <th>Affiliate</th>
               <th>Terdaftar</th>
               <th>Aksi</th>
             </tr>
           </thead>
-          <tbody id="adminClientsTableBody">
-            @forelse ($clients as $client)
+          <tbody id="adminUsersTableBody">
+            @forelse ($users ?? [] as $user)
               @php
-                $statusBadge = match ($client->status) {
+                $client = $user->client;
+                $statusBadge = match ($client?->status) {
                     'active' => 'badge-active',
                     'inactive' => 'badge-expired',
                     default => 'badge-pending',
                 };
-                $statusLabel = $client->status === 'inactive' ? 'Nonaktif' : 'Aktif';
+                $statusLabel = $client?->status === 'inactive' ? 'Nonaktif' : ($client ? 'Aktif' : '—');
+                $roleLabel = match ($user->role) {
+                    'super_admin' => 'Super Admin',
+                    'admin' => 'Admin',
+                    'affiliate' => 'Affiliate',
+                    default => 'Client',
+                };
+                $roleBadge = match ($user->role) {
+                    'super_admin' => 'badge-active',
+                    'admin' => 'badge-pending',
+                    'affiliate' => 'badge-pending',
+                    default => 'badge-active',
+                };
+                $appNames = $client?->applications?->pluck('name')->values() ?? collect();
+                $appCount = $appNames->count();
               @endphp
-              <tr data-client-id="{{ $client->id }}">
-                <td class="td-bold">{{ $client->company_name }}</td>
-                <td>{{ $client->user?->name ?? '—' }}</td>
+              <tr data-user-id="{{ $user->id }}" data-client-id="{{ $client?->id }}" @if($appCount > 0) data-application-names="{{ rawurlencode($appNames->toJson()) }}" @endif>
+                <td class="td-bold">{{ $user->name }}</td>
                 <td>
-                  {{ $client->user?->email ?? '—' }}
-                  @if ($client->user?->email_verified_at)
+                  {{ $user->email }}
+                  @if ($user->email_verified_at)
                     <span class="badge badge-active" style="font-size:10px;padding:2px 6px;margin-left:4px;">Verified</span>
                   @endif
                 </td>
-                <td>{{ $client->applications->pluck('name')->join(', ') ?: '—' }}</td>
-                <td>{{ $client->whatsapp }}</td>
-                <td><span class="badge {{ $statusBadge }}">{{ $statusLabel }}</span></td>
-                <td>{{ $client->created_at?->format('d M Y') ?? '—' }}</td>
+                <td><span class="badge {{ $roleBadge }}">{{ $roleLabel }}</span></td>
                 <td>
-                  <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;margin-right:4px;" onclick="openAdminClientModal({{ $client->id }})">Edit</button>
-                  <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;color:var(--rose);" onclick="deleteAdminClient({{ $client->id }})">Hapus</button>
+                  @if ($appCount === 0)
+                    —
+                  @else
+                    <button type="button" class="btn btn-secondary" style="padding:2px 10px;font-size:11px;" onclick="showAdminUserApplications({{ $user->id }})">{{ $appCount }} aplikasi</button>
+                  @endif
+                </td>
+                <td>{{ $client?->whatsapp ?? '—' }}</td>
+                <td>@if($client)<span class="badge {{ $statusBadge }}">{{ $statusLabel }}</span>@else — @endif</td>
+                <td>
+                  @if ($client)
+                    @if ($user->affiliate && $user->affiliate->status === 'active')
+                      <span class="badge badge-active">Aktif</span>
+                    @else
+                      <span class="badge badge-expired">Nonaktif</span>
+                    @endif
+                  @else
+                    —
+                  @endif
+                </td>
+                <td>{{ $user->created_at?->format('d M Y') ?? '—' }}</td>
+                <td class="admin-users-actions-cell">
+                  @if ($client)
+                    <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="openAdminClientModal({{ $client->id }})">Edit</button>
+                  @elseif (in_array($user->role, ['admin', 'super_admin'], true))
+                    <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;margin-right:4px;" onclick="openAdminUserEditModal({{ $user->id }})">Edit</button>
+                  @endif
                 </td>
               </tr>
             @empty
               <tr>
-                <td colspan="8" style="text-align:center; color:var(--text-3); padding:28px;">
-                  Belum ada client terdaftar.
+                <td colspan="9" style="text-align:center; color:var(--text-3); padding:28px;">
+                  Belum ada user terdaftar.
                 </td>
               </tr>
             @endforelse
@@ -74,6 +110,7 @@
 
         <form id="adminClientForm" onsubmit="submitAdminClientForm(event)" novalidate>
           <input type="hidden" id="adminClientId" value="">
+          <input type="hidden" id="adminClientUserId" value="">
 
           <div class="admin-app-shell">
             <aside class="admin-app-side">
@@ -86,6 +123,10 @@
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h7"/><rect x="15" y="15" width="6" height="6" rx="1"/></svg>
                   Aplikasi & Status
                 </button>
+                <button type="button" class="admin-app-nav-item" data-panel="affiliate" onclick="switchAdminClientPanel('affiliate', this)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  Affiliate
+                </button>
               </nav>
             </aside>
 
@@ -97,12 +138,8 @@
                 </div>
                 <div class="admin-app-panel-body">
                   <div class="form-group">
-                    <label class="admin-app-label" for="adminClientName">Nama Lengkap</label>
-                    <input class="admin-app-input" id="adminClientName" type="text" required placeholder="Nama kontak">
-                  </div>
-                  <div class="form-group">
-                    <label class="admin-app-label" for="adminClientCompany">Nama Perusahaan</label>
-                    <input class="admin-app-input" id="adminClientCompany" type="text" required placeholder="Nama perusahaan">
+                    <label class="admin-app-label" for="adminClientName">Nama akun</label>
+                    <input class="admin-app-input" id="adminClientName" type="text" required placeholder="Nama akun">
                   </div>
                   <div class="admin-app-form-grid">
                     <div class="form-group">
@@ -125,6 +162,28 @@
                     <label class="admin-app-label" for="adminClientPassword">Password <span class="admin-app-label-hint" id="adminClientPasswordHint">(wajib)</span></label>
                     <input class="admin-app-input" id="adminClientPassword" type="password" minlength="8" placeholder="Minimal 8 karakter">
                   </div>
+                  <div class="form-group" id="adminClientUserRoleGroup" hidden>
+                    <label class="admin-app-label" for="adminClientUserRole">Role akun</label>
+                    <select class="admin-app-input admin-user-role-select" id="adminClientUserRole">
+                      <option value="client">Client</option>
+                      <option value="admin">Admin</option>
+                      <option value="super_admin">Super Admin</option>
+                    </select>
+                    <p class="admin-app-label-hint" style="margin-top:6px;">Hanya super admin. Client wajib punya profil client.</p>
+                  </div>
+                  <input type="hidden" id="adminClientStatus" value="active">
+                  <div id="adminClientAccountZone" class="admin-client-account-zone" hidden>
+                    <div class="admin-client-account-zone-title">Kelola akun client</div>
+                    <p class="admin-app-label-hint" style="margin:0 0 12px;">Nonaktifkan untuk memblokir login. Lisensi per aplikasi tidak berubah.</p>
+                    <div class="admin-client-account-status-row">
+                      <span class="badge badge-active" id="adminClientStatusBadge">Aktif</span>
+                      <button type="button" class="btn btn-secondary" id="adminClientToggleStatusBtn" onclick="toggleAdminClientAccountStatus()">Nonaktifkan akun</button>
+                    </div>
+                    <div class="admin-client-account-danger">
+                      <p class="admin-app-label-hint" style="margin:0 0 10px;">Menghapus client akan menghapus user, lisensi, dan data terkait.</p>
+                      <button type="button" class="btn btn-secondary admin-client-delete-btn" onclick="deleteAdminClientFromModal()">Hapus client</button>
+                    </div>
+                  </div>
                 </div>
               </section>
 
@@ -137,16 +196,37 @@
                   <div class="form-group">
                     <label class="admin-app-label">Aplikasi yang dibeli</label>
                     <div id="adminClientApplications" class="admin-app-checklist admin-app-checklist-light">Memuat daftar aplikasi…</div>
-                    <p class="admin-app-label-hint" style="margin-top:8px;">Centang aplikasi, lalu pilih paket (Trial, Basic, Pro, dll.) sesuai Master Aplikasi.</p>
+                    <p class="admin-app-label-hint" style="margin-top:8px;">Ganti paket di sini (tanpa pembayaran client). Masa berlaku dihitung ulang saat paket berubah. Perpanjang/revoke lisensi lewat menu Lisensi (Renew/Revoke).</p>
                   </div>
-                  <div class="form-group" style="margin-bottom:0;">
-                    <label class="admin-app-label" for="adminClientStatus">Status akun</label>
-                    <select class="admin-app-input" id="adminClientStatus" required>
-                      <option value="active">Aktif</option>
-                      <option value="inactive">Nonaktif</option>
-                    </select>
-                    <p class="admin-app-label-hint" style="margin-top:6px;">Kontrol admin — Nonaktif memblokir login (mis. pelanggaran). Durasi lisensi tetap dari paket.</p>
+                </div>
+              </section>
+
+              <section class="admin-app-panel" data-panel="affiliate">
+                <div class="admin-app-panel-head">
+                  <h4>Program Affiliate</h4>
+                  <p>Override admin — client biasanya mengaktifkan sendiri di portal</p>
+                </div>
+                <div class="admin-app-panel-body">
+                  <label class="admin-client-email-verify" for="adminClientAffiliateEnabled" style="margin-bottom:16px;">
+                    <input type="checkbox" id="adminClientAffiliateEnabled">
+                    <span>Paksa aktif/nonaktif (override)</span>
+                  </label>
+                  <div class="admin-app-form-grid">
+                    <div class="form-group">
+                      <label class="admin-app-label" for="adminClientAffiliateCode">Kode referral</label>
+                      <input class="admin-app-input" id="adminClientAffiliateCode" type="text" placeholder="Auto (AA0001)" maxlength="32">
+                      <p class="admin-app-label-hint" style="margin-top:4px;">Kosongkan untuk generate otomatis saat pertama kali diaktifkan.</p>
+                    </div>
+                    <div class="form-group">
+                      <label class="admin-app-label" for="adminClientAffiliateStatus">Status affiliate</label>
+                      <select class="admin-app-input" id="adminClientAffiliateStatus">
+                        <option value="active">Active</option>
+                        <option value="pending">Pending</option>
+                        <option value="suspended">Suspended</option>
+                      </select>
+                    </div>
                   </div>
+                  <p class="admin-app-label-hint" id="adminClientAffiliateLinkHint" hidden style="margin-top:8px;"></p>
                 </div>
               </section>
             </div>

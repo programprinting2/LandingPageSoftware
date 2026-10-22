@@ -15,6 +15,7 @@ Route::middleware([HandleSpotColorCors::class])->group(function () {
 
     Route::post('/auth/register', [ApiAuthController::class, 'register']);
     Route::post('/auth/login', [ApiAuthController::class, 'login']);
+    Route::post('/auth/google/exchange', [ApiAuthController::class, 'exchangeGoogleDesktop']);
     Route::get('/referral/{code}', [ApiReferralController::class, 'show'])->name('referral.show');
 
     Route::middleware(AuthenticateApiToken::class)->group(function () {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreClientRegistrationRequest;
 use App\Services\ClientAuthService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 
 class ClientRegistrationController extends Controller
 {
@@ -19,14 +20,20 @@ class ClientRegistrationController extends Controller
             'email' => $validated['email'],
             'password' => $validated['password'],
             'company_name' => $validated['company_name'],
-            'whatsapp' => $validated['whatsapp'],
+            'whatsapp' => trim((string) ($validated['whatsapp'] ?? '')),
             'application_id' => $validated['application_id'] ?? null,
         ]);
 
+        $user = $result['user'];
+        Auth::login($user);
+        $request->session()->regenerate();
+
         return response()->json([
-            'message' => 'Pendaftaran berhasil. Kami telah mengirim link konfirmasi ke email Anda. Silakan verifikasi sebelum login.',
+            'message' => 'Pendaftaran berhasil. Anda sudah masuk.',
+            'logged_in' => true,
             'requires_verification' => true,
-            'email' => $result['user']->email,
+            'email' => $user->email,
+            'client' => $this->authService->clientPayload($user),
         ], 201);
     }
 }

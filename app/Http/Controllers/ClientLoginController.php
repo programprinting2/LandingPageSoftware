@@ -17,6 +17,13 @@ class ClientLoginController extends Controller
         $validated = $request->validated();
         $email = strtolower(trim($validated['email']));
 
+        $googleOnly = $this->authService->findGoogleOnlyClientByEmail($email);
+        if ($googleOnly) {
+            return response()->json([
+                'message' => 'Akun ini mendaftar dengan Google. Gunakan tombol "Masuk dengan akun Google".',
+            ], 422);
+        }
+
         $user = $this->authService->attemptClientLogin($email, $validated['password']);
 
         if (! $user) {

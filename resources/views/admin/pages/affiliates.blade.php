@@ -1,9 +1,9 @@
 ﻿    <div id="admin-affiliates" class="dash-page">
-      <div class="dash-header"><h1>Manajemen Affiliate</h1><p>Kelola dan approve pendaftaran affiliate</p></div>
+      <div class="dash-header"><h1>Manajemen Affiliate</h1><p>Daftar affiliate — client mengaktifkan sendiri dari portal Program Affiliate</p></div>
       <div class="dash-table-wrap">
         <div class="dash-table-header">
           <h3 id="adminAffiliatesCount">{{ $affiliates->count() }} affiliate terdaftar</h3>
-          <button type="button" class="btn btn-primary" style="padding:8px 16px;font-size:12px;" onclick="openAdminAffiliateModal()">+ Tambah Affiliate</button>
+          <button type="button" class="btn btn-secondary" style="padding:8px 16px;font-size:12px;" onclick="switchDashPage('admin','users',document.querySelector('#dashAdmin .dash-nav-item[onclick*=users]'))">Buka User</button>
         </div>
         <table class="dash-table">
           <thead>

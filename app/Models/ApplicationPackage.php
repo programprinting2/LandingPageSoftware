@@ -10,7 +10,10 @@ class ApplicationPackage extends Model
     protected $fillable = [
         'application_id',
         'name',
+        'is_trial',
         'devices_quota',
+        'parallel_max',
+        'feature_uv',
         'duration_days',
         'price',
         'discount_percent',
@@ -22,7 +25,10 @@ class ApplicationPackage extends Model
     protected function casts(): array
     {
         return [
+            'is_trial' => 'boolean',
             'devices_quota' => 'integer',
+            'parallel_max' => 'integer',
+            'feature_uv' => 'boolean',
             'duration_days' => 'integer',
             'price' => 'decimal:2',
             'discount_percent' => 'decimal:2',

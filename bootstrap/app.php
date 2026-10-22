@@ -16,6 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'api.token' => \App\Http\Middleware\AuthenticateApiToken::class,
             'spotcolor.cors' => \App\Http\Middleware\HandleSpotColorCors::class,
+            'admin.user' => \App\Http\Middleware\EnsureAdminUser::class,
+            'super.admin' => \App\Http\Middleware\EnsureSuperAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

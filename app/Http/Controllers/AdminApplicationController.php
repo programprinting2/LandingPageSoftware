@@ -6,6 +6,7 @@ use App\Http\Requests\StoreAdminApplicationRequest;
 use App\Http\Requests\UpdateAdminApplicationRequest;
 use App\Models\Application;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -36,6 +37,7 @@ class AdminApplicationController extends Controller
                 'name' => $validated['name'],
                 'slug' => $slug,
                 'description' => $validated['description'] ?? null,
+                'logo_url' => $this->normalizeLogoUrl($validated['logo_url'] ?? null),
                 'default_devices_max' => (int) $validated['default_devices_max'],
                 'is_active' => (bool) ($validated['is_active'] ?? true),
                 'sort_order' => (int) ($validated['sort_order'] ?? 0),
@@ -64,6 +66,7 @@ class AdminApplicationController extends Controller
                 'name' => $validated['name'],
                 'slug' => $slug,
                 'description' => $validated['description'] ?? null,
+                'logo_url' => $this->normalizeLogoUrl($validated['logo_url'] ?? null),
                 'default_devices_max' => (int) $validated['default_devices_max'],
                 'is_active' => (bool) ($validated['is_active'] ?? $application->is_active),
                 'sort_order' => (int) ($validated['sort_order'] ?? $application->sort_order),
@@ -79,6 +82,27 @@ class AdminApplicationController extends Controller
         return response()->json([
             'message' => 'Aplikasi berhasil diperbarui.',
             'application' => $this->formatApplication($application),
+        ]);
+    }
+
+    public function uploadLogo(Request $request): JsonResponse
+    {
+        $request->validate([
+            'image' => ['required', 'file', 'mimes:jpeg,jpg,png,webp,gif,svg', 'max:5120'],
+        ]);
+
+        $directory = public_path('images/applications');
+        if (! is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        $file = $request->file('image');
+        $extension = strtolower($file->getClientOriginalExtension() ?: 'png');
+        $filename = Str::uuid().'.'.$extension;
+        $file->move($directory, $filename);
+
+        return response()->json([
+            'url' => '/images/applications/'.$filename,
         ]);
     }
 
@@ -116,6 +140,9 @@ class AdminApplicationController extends Controller
 
             $application->packages()->create([
                 'name' => $name,
+                'is_trial' => (bool) ($package['is_trial'] ?? false)
+                    || strtolower($name) === 'trial'
+                    || str_contains(strtolower($name), 'trial'),
                 'devices_quota' => (int) ($package['devices_quota'] ?? 1),
                 'duration_days' => (int) ($package['duration_days'] ?? 0),
                 'price' => (float) ($package['price'] ?? 0),
@@ -123,8 +150,28 @@ class AdminApplicationController extends Controller
                 'affiliate_commission_fixed' => (float) ($package['affiliate_commission_fixed'] ?? 0),
                 'affiliate_commission_percent' => (float) ($package['affiliate_commission_percent'] ?? 0),
                 'sort_order' => (int) ($package['sort_order'] ?? $index),
+                'parallel_max' => $this->normalizeParallelMax($package['parallel_max'] ?? null),
+                'feature_uv' => (bool) ($package['feature_uv'] ?? true),
             ]);
         }
+    }
+
+    private function normalizeParallelMax(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $max = (int) $value;
+
+        return $max >= 1 && $max <= 99 ? $max : null;
+    }
+
+    private function normalizeLogoUrl(mixed $value): ?string
+    {
+        $url = trim((string) ($value ?? ''));
+
+        return $url !== '' ? $url : null;
     }
 
     private function resolveSlug(?string $slug, string $name, ?int $ignoreId = null): string
@@ -161,6 +208,7 @@ class AdminApplicationController extends Controller
             'name' => $application->name,
             'slug' => $application->slug,
             'description' => $application->description,
+            'logo_url' => $application->logo_url,
             'default_devices_max' => $application->default_devices_max,
             'is_active' => $application->is_active,
             'sort_order' => $application->sort_order,
@@ -178,6 +226,8 @@ class AdminApplicationController extends Controller
                     'affiliate_commission_fixed' => (float) $package->affiliate_commission_fixed,
                     'affiliate_commission_percent' => (float) $package->affiliate_commission_percent,
                     'sort_order' => $package->sort_order,
+                    'parallel_max' => $package->parallel_max !== null ? (int) $package->parallel_max : null,
+                    'feature_uv' => (bool) $package->feature_uv,
                 ])
                 ->values()
                 ->all(),

@@ -20,4 +20,9 @@ return [
     'timeout' => (int) env('KOMERCE_TIMEOUT', 30),
 
     'allow_simulate' => env('KOMERCE_ALLOW_SIMULATE', null),
+
+    /*
+    | false = skip TLS verify (Windows dev cURL error 60). Production: true or path to cacert.pem
+    */
+    'verify_ssl' => env('KOMERCE_VERIFY_SSL', true),
 ];

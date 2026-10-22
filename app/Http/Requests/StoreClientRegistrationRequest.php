@@ -12,13 +12,21 @@ class StoreClientRegistrationRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        $whatsapp = $this->input('whatsapp');
+        if ($whatsapp === null || trim((string) $whatsapp) === '') {
+            $this->merge(['whatsapp' => null]);
+        }
+    }
+
     public function rules(): array
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'company_name' => ['required', 'string', 'max:255'],
+            'company_name' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'whatsapp' => ['required', 'string', 'max:20', 'regex:/^08[0-9]{8,13}$/'],
+            'whatsapp' => ['nullable', 'string', 'max:20', 'regex:/^08[0-9]{8,13}$/'],
             'password' => ['required', 'string', Password::min(8)],
             'application_id' => ['nullable', 'integer', 'exists:applications,id'],
         ];
@@ -27,12 +35,10 @@ class StoreClientRegistrationRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Nama lengkap wajib diisi.',
-            'company_name.required' => 'Nama perusahaan wajib diisi.',
+            'name.required' => 'Nama akun wajib diisi.',
             'email.required' => 'Email wajib diisi.',
             'email.email' => 'Format email tidak valid.',
             'email.unique' => 'Email sudah terdaftar.',
-            'whatsapp.required' => 'Nomor WhatsApp wajib diisi.',
             'whatsapp.regex' => 'Nomor WhatsApp harus dimulai 08 dan 10-15 digit.',
             'password.required' => 'Password wajib diisi.',
             'password.min' => 'Password minimal 8 karakter.',

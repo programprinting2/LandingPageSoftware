@@ -20,14 +20,14 @@ class PaymentService
         private TransactionService $transactionService,
     ) {}
 
-    public function createUpgradePayment(User $user, int $packageId, string $applicationSlug = 'spot-color', ?string $referralCode = null): array
-    {
-        $validation = $this->licenseService->validateUpgradeRequest($user, $packageId, $applicationSlug);
-
-        if (($validation['status'] ?? '') === 'error') {
-            return $validation;
-        }
-
+    public function createPackageOrder(
+        User $user,
+        ApplicationPackage $targetPackage,
+        Application $application,
+        string $orderType,
+        ?ApplicationPackage $currentPackage,
+        ?string $referralCode = null,
+    ): array {
         $affiliate = $this->resolveAffiliateReferral($referralCode);
 
         if ($referralCode !== null && $referralCode !== '' && ! $affiliate) {
@@ -36,13 +36,6 @@ class PaymentService
                 'message' => 'Kode referral tidak valid atau affiliate tidak aktif.',
             ];
         }
-
-        /** @var Application $application */
-        $application = $validation['application'];
-        /** @var ApplicationPackage $targetPackage */
-        $targetPackage = $validation['target_package'];
-        /** @var ApplicationPackage|null $currentPackage */
-        $currentPackage = $validation['current_package'];
 
         $listPrice = (float) $targetPackage->price;
         $discountPercent = $affiliate
@@ -68,6 +61,12 @@ class PaymentService
         $user->loadMissing('client');
         $orderId = $this->generateOrderId();
 
+        $itemLabel = match ($orderType) {
+            'renew' => sprintf('Perpanjang %s — %s', $application->name, $targetPackage->name),
+            'purchase' => sprintf('Beli %s — %s', $application->name, $targetPackage->name),
+            default => sprintf('Upgrade %s — %s', $application->name, $targetPackage->name),
+        };
+
         $payload = [
             'order_id' => $orderId,
             'payment_type' => 'qris',
@@ -78,7 +77,7 @@ class PaymentService
                 'phone' => $user->client?->whatsapp ?: '080000000000',
             ],
             'items' => [[
-                'name' => sprintf('Upgrade %s — %s', $application->name, $targetPackage->name),
+                'name' => $itemLabel,
                 'quantity' => 1,
                 'price' => $amount,
             ]],
@@ -113,7 +112,7 @@ class PaymentService
             'application_package_id' => $targetPackage->id,
             'affiliate_id' => $affiliate?->id,
             'referral_code' => $affiliate?->code,
-            'type' => 'upgrade',
+            'type' => in_array($orderType, ['purchase', 'renew', 'upgrade'], true) ? $orderType : 'upgrade',
             'amount' => $amount,
             'payment_type' => 'qris',
             'komerce_payment_id' => $paymentId ?: null,
@@ -132,12 +131,17 @@ class PaymentService
 
         return [
             'status' => 'success',
-            'message' => 'QRIS upgrade berhasil dibuat. Selesaikan pembayaran dalam 5 menit.',
+            'message' => 'Pembayaran QRIS dibuat. Selesaikan pembayaran sebelum kedaluwarsa.',
             'payment_required' => true,
             'sandbox_simulate' => $this->allowsSimulatePayment(),
             'referral_code' => $affiliate?->code,
             'payment' => $this->formatPaymentOrder($order),
         ];
+    }
+
+    public function createUpgradePayment(User $user, int $packageId, string $applicationSlug = 'spot-color', ?string $referralCode = null): array
+    {
+        return app(ClientCommerceService::class)->beginCheckout($user, $packageId, $applicationSlug, $referralCode);
     }
 
     private function resolveAffiliateReferral(?string $code): ?Affiliate
@@ -491,11 +495,20 @@ class PaymentService
             $currentPackageId = (int) data_get($locked->meta, 'current_package_id', 0);
             $currentPackage = $currentPackageId > 0 ? ApplicationPackage::find($currentPackageId) : null;
 
-            $this->licenseService->applyUpgradePackage($user, $application, $targetPackage, $currentPackage);
+            $orderType = in_array((string) $locked->type, ['purchase', 'renew', 'upgrade'], true)
+                ? (string) $locked->type
+                : 'upgrade';
+
+            $this->licenseService->applyPackageForClient(
+                $user,
+                $application,
+                $targetPackage,
+                $currentPackage,
+                $orderType,
+            );
 
             $transaction = Transaction::query()
                 ->where('client_id', $locked->client_id)
-                ->where('type', 'upgrade')
                 ->where('application_package_id', $targetPackage->id)
                 ->latest('id')
                 ->first();

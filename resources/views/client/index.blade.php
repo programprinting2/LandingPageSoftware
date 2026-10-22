@@ -1,4 +1,4 @@
-<div id="dashClient" class="app-dashboard active">
+<div id="dashClient" class="app-dashboard active{{ !empty($landingData['initialClient']) ? ' is-ready' : '' }}">
     @include('client.components.sidebar')
 
     <div class="dash-main">
@@ -7,5 +7,6 @@
         @include('client.pages.downloads')
         @include('client.pages.billing')
         @include('client.pages.settings')
+        @include('client.pages.affiliate-overview')
     </div>
 </div>

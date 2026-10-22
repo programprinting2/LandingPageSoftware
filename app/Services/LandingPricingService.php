@@ -33,7 +33,10 @@ class LandingPricingService
             return [
                 'package_id' => $package->id,
                 'name' => $package->name,
+                'is_trial' => (bool) $package->is_trial
+                    || ((float) $package->price <= 0 && preg_match('/trial/i', $package->name)),
                 'price' => $this->formatPrice($package),
+                'price_amount' => (float) $package->price,
                 'period' => $this->formatPeriod($package, (float) $package->price),
                 'features' => array_values(array_filter(array_map('strval', $features))),
                 'popular' => (bool) ($override['popular'] ?? $legacy['popular'] ?? false),

@@ -12,6 +12,7 @@ class Application extends Model
         'name',
         'slug',
         'description',
+        'logo_url',
         'default_devices_max',
         'is_active',
         'sort_order',
@@ -29,7 +30,7 @@ class Application extends Model
     public function clients(): BelongsToMany
     {
         return $this->belongsToMany(Client::class, 'client_applications')
-            ->withPivot(['devices_max', 'status', 'purchased_at', 'expires_at'])
+            ->withPivot(['application_package_id', 'devices_max', 'status', 'purchased_at', 'expires_at', 'trial_consumed'])
             ->withTimestamps();
     }
 

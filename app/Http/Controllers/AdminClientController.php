@@ -45,7 +45,7 @@ class AdminClientController extends Controller
 
             $client = Client::create([
                 'user_id' => $user->id,
-                'company_name' => $validated['company_name'],
+                'company_name' => $validated['company_name'] ?? $validated['name'],
                 'whatsapp' => $validated['whatsapp'],
                 'status' => $validated['status'],
                 'devices_max' => config('spotcolor.devices_max', 3),
@@ -84,7 +84,7 @@ class AdminClientController extends Controller
             $client->user->update($userData);
 
             $client->update([
-                'company_name' => $validated['company_name'],
+                'company_name' => $validated['company_name'] ?? $validated['name'],
                 'whatsapp' => $validated['whatsapp'],
                 'status' => $validated['status'],
             ]);
@@ -168,19 +168,27 @@ class AdminClientController extends Controller
 
             $existingPackageId = (int) ($existing?->pivot?->application_package_id ?? 0);
             $samePackage = $existingPackageId > 0 && $existingPackageId === (int) $package->id;
-            $purchasedAt = $this->parsePivotDate($existing?->pivot?->purchased_at) ?? now();
 
-            if ($samePackage && $existing?->pivot?->expires_at) {
-                $expiresAt = $this->parsePivotDate($existing->pivot->expires_at);
-            } elseif ((int) $package->duration_days > 0) {
-                $expiresAt = $purchasedAt->copy()->addDays((int) $package->duration_days);
+            if ($samePackage) {
+                $purchasedAt = $this->parsePivotDate($existing?->pivot?->purchased_at) ?? now();
+                if ($existing?->pivot?->expires_at) {
+                    $expiresAt = $this->parsePivotDate($existing->pivot->expires_at);
+                } elseif ((int) $package->duration_days > 0) {
+                    $expiresAt = $purchasedAt->copy()->addDays((int) $package->duration_days);
+                } else {
+                    $expiresAt = null;
+                }
+                $status = (string) ($existing?->pivot?->status ?: ($package->is_trial ? 'trial' : 'active'));
+                $trialConsumed = (bool) ($existing?->pivot?->trial_consumed ?? false);
             } else {
-                $expiresAt = null;
+                $purchasedAt = now();
+                $expiresAt = (int) $package->duration_days > 0
+                    ? $purchasedAt->copy()->addDays((int) $package->duration_days)
+                    : null;
+                $status = $package->is_trial ? 'trial' : 'active';
+                $trialConsumed = $package->is_trial
+                    || (bool) ($existing?->pivot?->trial_consumed ?? false);
             }
-
-            $status = $samePackage && $existing?->pivot?->status
-                ? (string) $existing->pivot->status
-                : 'active';
 
             $sync[$applicationId] = [
                 'application_package_id' => $package->id,
@@ -188,6 +196,7 @@ class AdminClientController extends Controller
                 'status' => $status,
                 'purchased_at' => $purchasedAt,
                 'expires_at' => $expiresAt,
+                'trial_consumed' => $trialConsumed,
             ];
         }
 
@@ -200,13 +209,14 @@ class AdminClientController extends Controller
             'user:id,name,email,email_verified_at',
             'applications' => fn ($query) => $query
                 ->select('applications.id', 'applications.name', 'applications.slug')
-                ->withPivot(['application_package_id', 'devices_max', 'status', 'purchased_at', 'expires_at']),
+                ->withPivot(['application_package_id', 'devices_max', 'status', 'purchased_at', 'expires_at', 'trial_consumed']),
         ]);
 
         $packages = $this->packagesForClientApplications($client->applications);
 
         return [
             'id' => $client->id,
+            'user_id' => $client->user_id,
             'name' => $client->user?->name,
             'company_name' => $client->company_name,
             'email' => $client->user?->email,

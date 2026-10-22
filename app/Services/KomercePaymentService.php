@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -21,12 +23,21 @@ class KomercePaymentService
 
     public function createQrisPayment(array $payload): array
     {
-        $response = Http::timeout((int) config('komerce.timeout', 30))
-            ->withHeaders([
-                'x-api-key' => (string) config('komerce.api_key'),
-                'Accept' => 'application/json',
-            ])
-            ->post($this->endpoint('/api/v1/user/payment/create'), $payload);
+        try {
+            $response = $this->httpClient()
+                ->withHeaders([
+                    'x-api-key' => (string) config('komerce.api_key'),
+                    'Accept' => 'application/json',
+                ])
+                ->post($this->endpoint('/api/v1/user/payment/create'), $payload);
+        } catch (ConnectionException $e) {
+            Log::warning('Komerce create payment connection failed', ['error' => $e->getMessage()]);
+
+            return [
+                'ok' => false,
+                'message' => $this->connectionErrorMessage($e),
+            ];
+        }
 
         $json = $response->json();
 
@@ -61,12 +72,19 @@ class KomercePaymentService
 
     public function getPaymentStatus(string $paymentId): array
     {
-        $response = Http::timeout((int) config('komerce.timeout', 30))
-            ->withHeaders([
-                'x-api-key' => (string) config('komerce.api_key'),
-                'Accept' => 'application/json',
-            ])
-            ->get($this->endpoint('/api/v1/user/payment/status/'.urlencode($paymentId)));
+        try {
+            $response = $this->httpClient()
+                ->withHeaders([
+                    'x-api-key' => (string) config('komerce.api_key'),
+                    'Accept' => 'application/json',
+                ])
+                ->get($this->endpoint('/api/v1/user/payment/status/'.urlencode($paymentId)));
+        } catch (ConnectionException $e) {
+            return [
+                'ok' => false,
+                'message' => $this->connectionErrorMessage($e),
+            ];
+        }
 
         $json = $response->json();
 
@@ -102,15 +120,22 @@ class KomercePaymentService
         $url = rtrim((string) config('komerce.sandbox_base_url'), '/')
             .'/user/api/v1/user/payment/simulate/'.$methodSlug;
 
-        $response = Http::timeout((int) config('komerce.timeout', 30))
-            ->withHeaders([
-                'Accept' => 'application/json',
-                'Content-Type' => 'application/json',
-            ])
-            ->post($url, [
-                'external_id' => $externalId,
-                'amount' => $amount,
-            ]);
+        try {
+            $response = $this->httpClient()
+                ->withHeaders([
+                    'Accept' => 'application/json',
+                    'Content-Type' => 'application/json',
+                ])
+                ->post($url, [
+                    'external_id' => $externalId,
+                    'amount' => $amount,
+                ]);
+        } catch (ConnectionException $e) {
+            return [
+                'ok' => false,
+                'message' => $this->connectionErrorMessage($e),
+            ];
+        }
 
         $json = $response->json();
 
@@ -174,6 +199,32 @@ class KomercePaymentService
             'CANCELED', 'CANCELLED' => 'canceled',
             default => 'pending',
         };
+    }
+
+    private function httpClient(): PendingRequest
+    {
+        $request = Http::timeout((int) config('komerce.timeout', 30));
+        $verify = config('komerce.verify_ssl');
+
+        if ($verify === false || $verify === 'false' || $verify === '0') {
+            return $request->withOptions(['verify' => false]);
+        }
+
+        if (is_string($verify) && $verify !== '' && $verify !== 'true' && $verify !== '1') {
+            return $request->withOptions(['verify' => $verify]);
+        }
+
+        return $request;
+    }
+
+    private function connectionErrorMessage(ConnectionException $e): string
+    {
+        $raw = $e->getMessage();
+        if (str_contains($raw, 'SSL certificate') || str_contains($raw, 'cURL error 60')) {
+            return 'Koneksi ke gateway pembayaran gagal (sertifikat SSL). Di development Windows, set KOMERCE_VERIFY_SSL=false di .env atau pasang CA bundle untuk PHP/cURL.';
+        }
+
+        return 'Koneksi ke gateway pembayaran gagal. Periksa internet lalu coba lagi.';
     }
 
     private function endpoint(string $path): string

@@ -37,6 +37,12 @@
   font-weight: 500;
 }
 
+.hub-nav-auth {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .hub-nav {
   display: flex;
   align-items: center;

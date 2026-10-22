@@ -28,4 +28,6 @@ return [
 
     'default_application_slug' => env('SOFTSALE_DEFAULT_APP_SLUG', 'spot-color'),
     'default_trial_package_name' => env('SOFTSALE_DEFAULT_TRIAL_PACKAGE', 'trial'),
+
+    'super_admin_email' => env('SUPER_ADMIN_EMAIL', ''),
 ];

@@ -5,13 +5,21 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreApiLoginRequest;
 use App\Http\Requests\StoreApiRegistrationRequest;
+use App\Http\Requests\StoreGoogleDesktopExchangeRequest;
+use App\Models\User;
 use App\Services\ClientAuthService;
+use App\Services\ClientCommerceService;
+use App\Services\GoogleDesktopAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ApiAuthController extends Controller
 {
-    public function __construct(private ClientAuthService $authService) {}
+    public function __construct(
+        private ClientAuthService $authService,
+        private GoogleDesktopAuthService $desktopAuth,
+        private ClientCommerceService $commerceService,
+    ) {}
 
     public function register(StoreApiRegistrationRequest $request): JsonResponse
     {
@@ -33,6 +41,44 @@ class ApiAuthController extends Controller
             'requires_verification' => true,
             'email' => $result['user']->email,
         ], 201);
+    }
+
+    public function exchangeGoogleDesktop(StoreGoogleDesktopExchangeRequest $request): JsonResponse
+    {
+        $code = (string) $request->validated('code');
+        $user = $this->desktopAuth->consumeExchangeCode($code);
+
+        if (! $user) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Kode login tidak valid atau sudah kadaluarsa. Coba masuk dengan Google lagi.',
+            ], 401);
+        }
+
+        $user->loadMissing('client');
+
+        if ($user->role !== 'client' || ! $user->client) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akun client tidak ditemukan.',
+            ], 403);
+        }
+
+        if (! $this->authService->isClientActive($user)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Akun dinonaktifkan. Hubungi admin.',
+                'account_inactive' => true,
+            ], 403);
+        }
+
+        return response()->json(
+            $this->desktopAuthSessionPayload(
+                $user,
+                'Login dengan Google berhasil.',
+                $request->validated('application_slug'),
+            )
+        );
     }
 
     public function login(StoreApiLoginRequest $request): JsonResponse
@@ -70,7 +116,11 @@ class ApiAuthController extends Controller
         }
 
         return response()->json(
-            $this->authService->apiSessionPayload($user, 'Login berhasil')
+            $this->desktopAuthSessionPayload(
+                $user,
+                'Login berhasil',
+                $request->validated('application_slug'),
+            )
         );
     }
 
@@ -100,5 +150,21 @@ class ApiAuthController extends Controller
             'name' => $user->name,
             'created_at' => $user->created_at?->toIso8601String(),
         ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function desktopAuthSessionPayload(User $user, string $message, ?string $applicationSlug = null): array
+    {
+        $trial = $this->commerceService->attemptAutoTrialOnDesktopLogin($user, $applicationSlug);
+        $payload = $this->authService->apiSessionPayload($user, $message);
+
+        if ($trial['activated'] ?? false) {
+            $payload['trial_activated'] = true;
+            $payload['message'] = trim($message.' '.($trial['message'] ?? 'Trial berhasil diaktifkan.'));
+        }
+
+        return $payload;
     }
 }

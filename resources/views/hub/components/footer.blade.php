@@ -27,9 +27,11 @@
       @endforelse
     </div>
     <div>
+      @php($clientLoggedIn = ! empty($landingData['initialClient']))
       <div class="hub-footer-col-title">{{ $accountTitle }}</div>
-      <span class="hub-footer-link" onclick="openModal('register')">Daftar</span>
-      <span class="hub-footer-link" onclick="openModal('login')">Masuk</span>
+      <span class="hub-footer-link" data-auth-guest @if($clientLoggedIn) hidden @endif onclick="openModal('register')">Daftar</span>
+      <span class="hub-footer-link" data-auth-guest @if($clientLoggedIn) hidden @endif onclick="openModal('login')">Masuk</span>
+      <span class="hub-footer-link" data-auth-user @if(! $clientLoggedIn) hidden @endif onclick="goToClientDashboard()">Dashboard</span>
     </div>
   </div>
   <div class="container hub-footer-bottom">{{ $footer['copyright'] ?? '' }}</div>

@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class AdminAffiliateController extends Controller
 {
@@ -29,32 +30,9 @@ class AdminAffiliateController extends Controller
 
     public function store(StoreAdminAffiliateRequest $request): JsonResponse
     {
-        $validated = $request->validated();
-
-        $affiliate = DB::transaction(function () use ($validated) {
-            $user = User::create([
-                'name' => $validated['name'],
-                'email' => $validated['email'],
-                'password' => $validated['password'],
-                'role' => 'affiliate',
-                'email_verified_at' => now(),
-            ]);
-
-            return Affiliate::create([
-                'user_id' => $user->id,
-                'code' => $this->resolveAffiliateCode($validated['code'] ?? null, $validated['name']),
-                'whatsapp' => $validated['whatsapp'] ?? null,
-                'bank_name' => $validated['bank_name'] ?? null,
-                'bank_account' => $validated['bank_account'] ?? null,
-                'bank_account_name' => $validated['bank_account_name'] ?? null,
-                'status' => $validated['status'],
-            ]);
-        });
-
-        return response()->json([
-            'message' => 'Affiliate berhasil ditambahkan.',
-            'affiliate' => $this->formatAffiliate($affiliate->fresh()),
-        ], 201);
+        throw ValidationException::withMessages([
+            'email' => 'Affiliate baru diaktifkan dari menu User (profil client). Buka User → Edit client → tab Affiliate.',
+        ]);
     }
 
     public function update(UpdateAdminAffiliateRequest $request, Affiliate $affiliate): JsonResponse

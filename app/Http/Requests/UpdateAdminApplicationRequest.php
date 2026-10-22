@@ -27,6 +27,7 @@ class UpdateAdminApplicationRequest extends FormRequest
                 Rule::unique('applications', 'slug')->ignore($application?->id),
             ],
             'description' => ['nullable', 'string', 'max:2000'],
+            'logo_url' => ['nullable', 'string', 'max:500'],
             'default_devices_max' => ['required', 'integer', 'min:1', 'max:99'],
             'is_active' => ['sometimes', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
@@ -39,6 +40,8 @@ class UpdateAdminApplicationRequest extends FormRequest
             'packages.*.affiliate_commission_fixed' => ['nullable', 'numeric', 'min:0'],
             'packages.*.affiliate_commission_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'packages.*.sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
+            'packages.*.parallel_max' => ['nullable', 'integer', 'min:1', 'max:99'],
+            'packages.*.feature_uv' => ['sometimes', 'boolean'],
         ];
     }
 

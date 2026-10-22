@@ -16,7 +16,7 @@ class StoreAdminClientRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'company_name' => ['required', 'string', 'max:255'],
+            'company_name' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'whatsapp' => ['required', 'string', 'max:20', 'regex:/^08[0-9]{8,13}$/'],
             'password' => ['required', 'string', Password::min(8)],
@@ -33,8 +33,7 @@ class StoreAdminClientRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Nama lengkap wajib diisi.',
-            'company_name.required' => 'Nama perusahaan wajib diisi.',
+            'name.required' => 'Nama akun wajib diisi.',
             'email.required' => 'Email wajib diisi.',
             'email.email' => 'Format email tidak valid.',
             'email.unique' => 'Email sudah terdaftar.',

@@ -20,7 +20,7 @@ class Client extends Model
     public function applications(): BelongsToMany
     {
         return $this->belongsToMany(Application::class, 'client_applications')
-            ->withPivot(['application_package_id', 'devices_max', 'status', 'purchased_at', 'expires_at'])
+            ->withPivot(['application_package_id', 'devices_max', 'status', 'purchased_at', 'expires_at', 'trial_consumed'])
             ->withTimestamps();
     }
 

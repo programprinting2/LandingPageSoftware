@@ -1,4 +1,4 @@
-﻿<footer class="footer">
+<footer class="footer">
   <div class="container">
     <div class="footer-grid">
       <div>
@@ -11,10 +11,12 @@
         <span class="footer-link" onclick="scrollToSection('cara-kerja')">Cara Kerja</span>
         <span class="footer-link" onclick="scrollToSection('faq')">FAQ</span>
       </div>
+      @php($clientLoggedIn = ! empty($landingData['initialClient']))
       <div>
         <div class="footer-col-title">Akun</div>
-        <span class="footer-link" onclick="openModal('register')">Daftar</span>
-        <span class="footer-link" onclick="openModal('login')">Masuk</span>
+        <span class="footer-link" data-auth-guest @if($clientLoggedIn) hidden @endif onclick="openModal('register')">Daftar</span>
+        <span class="footer-link" data-auth-guest @if($clientLoggedIn) hidden @endif onclick="openModal('login')">Masuk</span>
+        <span class="footer-link" data-auth-user @if(! $clientLoggedIn) hidden @endif onclick="goToClientDashboard()">Dashboard</span>
       </div>
       <div>
         <div class="footer-col-title">Legal</div>

@@ -21,7 +21,7 @@ class UpdateAdminClientRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:255'],
-            'company_name' => ['required', 'string', 'max:255'],
+            'company_name' => ['nullable', 'string', 'max:255'],
             'email' => [
                 'required',
                 'email',
@@ -43,8 +43,7 @@ class UpdateAdminClientRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.required' => 'Nama lengkap wajib diisi.',
-            'company_name.required' => 'Nama perusahaan wajib diisi.',
+            'name.required' => 'Nama akun wajib diisi.',
             'email.required' => 'Email wajib diisi.',
             'email.email' => 'Format email tidak valid.',
             'email.unique' => 'Email sudah terdaftar.',

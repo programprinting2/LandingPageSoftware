@@ -9,15 +9,29 @@
   registerClientUrl = '/register/client',
   verificationResendUrl = '/email/verification-resend',
   loginClientUrl = '/login/client',
+  loginAdminUrl = '/login/admin',
+  adminMeUrl = '/api/admin/me',
+  adminUsersUrl = '/api/admin/users',
+  adminUsersRoleUrl = '/api/admin/users',
+  adminUsersAffiliateUrl = '/api/admin/users',
+  adminUsersDestroyUrl = '/api/admin/users',
   logoutUrl = '/logout',
   clientMeUrl = '/api/client/me',
+  clientAffiliateUrl = '/api/client/affiliate',
+  clientAffiliateEnrollUrl = '/api/client/affiliate/enroll',
   clientLicenseUrl = '/api/client/license',
+  clientCheckoutUrl = '/api/client/checkout',
+  clientCommercePlansUrl = '/api/client/commerce/plans',
+  clientTrialActivateUrl = '/api/client/trial/activate',
+  clientCheckoutStatusUrl = '/api/client/checkout',
+  clientCheckoutSimulateUrl = '/api/client/checkout',
   clientLicenseDeactivateUrl = '/api/client/license/deactivate',
   clientTransactionsUrl = '/api/client/transactions',
   adminClientsUrl = '/api/admin/clients',
   adminAffiliatesUrl = '/api/admin/affiliates',
   adminCommissionsUrl = '/api/admin/commissions',
   adminApplicationsUrl = '/api/admin/applications',
+  adminApplicationLogoUploadUrl = '/api/admin/applications/upload-logo',
   adminLicensesUrl = '/api/admin/licenses',
   adminTransactionsUrl = '/api/admin/transactions',
   adminPaymentOrdersUrl = '/api/admin/payment-orders',
@@ -28,15 +42,39 @@
   adminMailSettingsUrl = '/api/admin/mail-settings',
   adminMailSettingsTestUrl = '/api/admin/mail-settings/test',
   application: landingApplication = null,
+  initialClient: bootInitialClient = null,
+  initialClientLicense: bootInitialClientLicense = null,
+  googleAuthRedirectUrl = '/auth/google/redirect',
+  googleLoginEnabled = false,
+  postOAuthIntent: bootPostOAuthIntent = null,
+  flashAuthError: bootFlashAuthError = '',
+  flashAuthSuccess: bootFlashAuthSuccess = '',
 } = window.SOFTSALE_DATA || {};
 
 let appDialogResolver = null;
 
 const APP_ROUTE_KEY = 'softsale_route';
 const DEMO_PORTAL_KEY = 'softsale_demo_portal';
+const LANDING_PENDING_CHECKOUT_KEY = 'softsale_pending_checkout_package';
+const LANDING_INTENT_KEY = 'softsale_landing_intent';
+const LANDING_REFERRAL_KEY = 'softsale_referral_code';
+let landingCheckoutPollTimer = null;
+let landingActiveCheckoutOrderId = null;
 let adminClientsCache = [];
+let adminUsersCache = [];
+let adminSession = null;
 let adminAffiliatesCache = [];
 let adminCommissionsCache = [];
+let clientSession = null;
+let adminClientModalMode = 'client';
+let adminClientUserRoleOriginal = '';
+let clientBillingPendingCache = [];
+let landingCommercePlansPromise = null;
+let clientAffiliatePage = 1;
+const CLIENT_AFFILIATE_PER_PAGE = 10;
+let adminLicensesApplicationFilter = '';
+let adminLicensesSearchQuery = '';
+let adminLicensesSearchTimer = null;
 let adminApplicationsCache = [];
 let adminLicensesCache = [];
 let adminTransactionsCache = [];
@@ -60,26 +98,497 @@ const checkSVG = svgIcon('<path d="M20 6L9 17l-5-5"/>', 15, 'var(--green)');
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // RENDER SECTIONS
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+function landingPlansList() {
+  return window.SOFTSALE_DATA?.plans ?? PLANS ?? [];
+}
+
+function landingPlansHaveServerCtas() {
+  return landingPlansList().some((p) => typeof p.cta_action === 'string');
+}
+
+async function readJsonResponse(response) {
+  const text = await response.text();
+  if (!text) return { ok: response.ok, data: {} };
+  try {
+    return { ok: response.ok, data: JSON.parse(text) };
+  } catch {
+    return { ok: false, data: { message: 'Respons server tidak valid.' }, parseError: true };
+  }
+}
+
+function isClientLoggedInOnLanding() {
+  return !!(clientSession || bootInitialClient);
+}
+
+function landingApplicationSlug() {
+  return landingApplication?.slug || 'spot-color';
+}
+
+function captureLandingReferralFromUrl() {
+  try {
+    const ref = new URLSearchParams(window.location.search).get('ref');
+    if (ref) sessionStorage.setItem(LANDING_REFERRAL_KEY, ref.trim());
+  } catch {
+    // ignore
+  }
+}
+
+function landingReferralCode() {
+  try {
+    return sessionStorage.getItem(LANDING_REFERRAL_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function landingPlanCtaAction(plan) {
+  if (plan?.cta_action) return plan.cta_action;
+  if (isClientLoggedInOnLanding()) {
+    if (plan?.is_trial || (plan?.price_amount ?? 0) <= 0) return 'check_license';
+    return 'checkout';
+  }
+  if (plan?.is_trial || (plan?.price_amount ?? 0) <= 0) return 'trial';
+  return 'checkout';
+}
+
+function landingPlanButtonLabel(plan) {
+  if (plan?.cta_label) return plan.cta_label;
+  if (isClientLoggedInOnLanding()) {
+    if (plan?.is_trial || (plan?.price_amount ?? 0) <= 0) return 'Lihat Lisensi';
+    return `Beli ${plan.name || ''}`.trim();
+  }
+  if (plan?.is_trial || (plan?.price_amount ?? 0) <= 0) return 'Coba Gratis';
+  return `Beli ${plan.name || ''}`.trim();
+}
+
+function setLandingIntent(type, packageId) {
+  try {
+    sessionStorage.setItem(
+      LANDING_INTENT_KEY,
+      JSON.stringify({ type, package_id: packageId ? Number(packageId) : 0 }),
+    );
+    sessionStorage.removeItem(LANDING_PENDING_CHECKOUT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function consumeLandingIntent() {
+  try {
+    const legacy = sessionStorage.getItem(LANDING_PENDING_CHECKOUT_KEY);
+    if (legacy) {
+      sessionStorage.removeItem(LANDING_PENDING_CHECKOUT_KEY);
+      return { type: 'checkout', package_id: Number(legacy) };
+    }
+    const raw = sessionStorage.getItem(LANDING_INTENT_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(LANDING_INTENT_KEY);
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.type) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function goToClientLicense() {
+  window.location.href = `${clientDashboardUrl}#/license`;
+}
+
+async function refreshLandingCommercePlans(options = {}) {
+  const { force = false } = options;
+  if (!isClientLoggedInOnLanding() || !document.getElementById('pricingGrid')) return;
+
+  if (!force && landingPlansHaveServerCtas()) return;
+
+  if (landingCommercePlansPromise) {
+    await landingCommercePlansPromise;
+    return;
+  }
+
+  landingCommercePlansPromise = (async () => {
+    try {
+      const url = `${clientCommercePlansUrl}?application_slug=${encodeURIComponent(landingApplicationSlug())}`;
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        credentials: 'same-origin',
+      });
+      if (!response.ok) return;
+      const { data } = await readJsonResponse(response);
+      if (!Array.isArray(data.plans)) return;
+      window.SOFTSALE_DATA = window.SOFTSALE_DATA || {};
+      window.SOFTSALE_DATA.plans = data.plans;
+      renderPricing();
+    } catch {
+      // ignore
+    } finally {
+      landingCommercePlansPromise = null;
+    }
+  })();
+
+  await landingCommercePlansPromise;
+}
+
+async function activateClientTrial() {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  try {
+    const response = await fetch(clientTrialActivateUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ application_slug: landingApplicationSlug() }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      showAuthAlert(data.message || 'Trial gagal.', 'error');
+      return false;
+    }
+    if (data.payment) {
+      closeModal();
+      renderCheckoutPayment(data.payment, data.message);
+      return true;
+    }
+    await refreshLandingCommercePlans();
+    closeModal();
+    showAuthAlert(data.message || 'Trial berhasil diaktifkan.', 'success');
+    return true;
+  } catch {
+    showAuthAlert('Gagal mengaktifkan trial. Periksa koneksi lalu coba lagi.', 'error');
+    return false;
+  }
+}
+
+async function resumeLandingIntentAfterAuth() {
+  const intent = consumeLandingIntent();
+  if (!intent || !isClientLoggedInOnLanding()) return false;
+
+  if (intent.type === 'trial') {
+    await activateClientTrial();
+    return true;
+  }
+  if (intent.type === 'checkout' && Number(intent.package_id) > 0) {
+    closeModal();
+    await startClientCheckout(Number(intent.package_id));
+    return true;
+  }
+  return false;
+}
+
 function renderPricing() {
   const grid = document.getElementById('pricingGrid');
   if (!grid) return;
-  const items = window.SOFTSALE_DATA?.plans ?? PLANS;
-  grid.innerHTML = items.map((p, i) => `
-    <div class="price-card ${p.popular ? 'popular' : ''} reveal reveal-delay-${i + 1}">
-      <h3>${p.name}</h3>
+  const items = landingPlansList();
+  grid.innerHTML = items.map((p, i) => {
+    const packageId = Number(p.package_id ?? 0);
+    const onclick = packageId
+      ? `handleLandingPlanSelect(${packageId})`
+      : "handleLandingPlanSelect(0)";
+    const action = landingPlanCtaAction(p);
+    const enabled = p.cta_enabled !== false && action !== 'none';
+    return `
+    <div class="price-card ${p.popular ? 'popular' : ''}">
+      <h3>${escapeHtml(p.name || '')}</h3>
       <div class="price-amount-wrap">
-        <span class="price-amount">${p.price}</span>
-        <span class="price-period">${p.period}</span>
+        <span class="price-amount">${escapeHtml(p.price || '')}</span>
+        <span class="price-period">${escapeHtml(p.period || '')}</span>
       </div>
       <div class="price-features">
-        ${p.features.map(f => `<div class="price-feat">${checkSVG}<span>${f}</span></div>`).join('')}
+        ${(p.features || []).map((f) => `<div class="price-feat">${checkSVG}<span>${escapeHtml(f)}</span></div>`).join('')}
       </div>
-      <button class="btn ${p.popular ? 'btn-primary' : 'btn-secondary'} btn-full" onclick="openModal('register')">
-        Pilih ${p.name}
+      <button type="button" class="btn ${p.popular ? 'btn-primary' : 'btn-secondary'} btn-full landing-plan-cta" data-package-id="${packageId}" onclick="${onclick}"${enabled ? '' : ' disabled'}>
+        ${escapeHtml(landingPlanButtonLabel(p))}
       </button>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
+  syncLandingHeroPrimaryLabel();
 }
+
+function syncLandingHeroPrimaryLabel() {
+  const btn = document.querySelector('.hero-actions .btn-primary.btn-lg');
+  if (!btn) return;
+  if (!btn.dataset.heroCtaDefault) {
+    btn.dataset.heroCtaDefault = btn.textContent.trim();
+  }
+  if (!isClientLoggedInOnLanding()) {
+    btn.textContent = btn.dataset.heroCtaDefault;
+    return;
+  }
+  const trialPlan = landingPlansList().find(
+    (p) => p.is_trial || (p?.price_amount ?? 0) <= 0,
+  );
+  if (trialPlan) {
+    btn.textContent = landingPlanButtonLabel(trialPlan);
+  }
+}
+
+function handleLandingHeroCta() {
+  if (!document.getElementById('pricingGrid')) {
+    openModal('register');
+    return;
+  }
+  const trialPlan = landingPlansList().find(
+    (p) => p.is_trial || landingPlanCtaAction(p) === 'trial',
+  );
+  if (isClientLoggedInOnLanding()) {
+    if (trialPlan) {
+      const trialAction = landingPlanCtaAction(trialPlan);
+      if (trialAction === 'trial' && trialPlan.cta_enabled !== false) {
+        activateClientTrial();
+        return;
+      }
+      if (trialAction === 'check_license') {
+        goToClientLicense();
+        return;
+      }
+    }
+    scrollToSection('harga');
+    return;
+  }
+  setLandingIntent('trial', trialPlan ? Number(trialPlan.package_id) : 0);
+  openModal('register');
+}
+
+function handleLandingPlanAction(plan) {
+  if (!plan) return;
+  const action = landingPlanCtaAction(plan);
+  const packageId = Number(plan.package_id ?? 0);
+
+  if (action === 'none' || plan.cta_enabled === false) return;
+
+  if (action === 'check_license') {
+    goToClientLicense();
+    return;
+  }
+
+  if (!isClientLoggedInOnLanding()) {
+    if (action === 'checkout') {
+      setLandingIntent('checkout', packageId);
+      openModal('login');
+      return;
+    }
+    if (action === 'trial') {
+      setLandingIntent('trial', packageId);
+      openModal('register');
+      return;
+    }
+    if (action === 'register') {
+      openModal('register');
+      return;
+    }
+    openModal('register');
+    return;
+  }
+
+  if (action === 'trial') {
+    if (plan.cta_enabled === false || action === 'none') return;
+    activateClientTrial();
+    return;
+  }
+  if (action === 'checkout' && packageId > 0) {
+    startClientCheckout(packageId);
+  }
+}
+
+function handleLandingPlanSelect(packageId) {
+  const id = Number(packageId);
+  const plan = landingPlansList().find((p) => Number(p.package_id) === id);
+
+  if (!id || !plan) {
+    if (isClientLoggedInOnLanding()) {
+      scrollToSection('harga');
+      return;
+    }
+    openModal('register');
+    return;
+  }
+
+  handleLandingPlanAction(plan);
+}
+
+function showCheckoutAlert(message, type = 'warning') {
+  const alert = document.getElementById('checkoutAlert');
+  if (!alert) return;
+  alert.style.display = 'block';
+  alert.className = `auth-alert auth-alert-${type}`;
+  alert.textContent = message;
+}
+
+function clearCheckoutAlert() {
+  const alert = document.getElementById('checkoutAlert');
+  if (!alert) return;
+  alert.style.display = 'none';
+  alert.textContent = '';
+}
+
+function closeCheckoutModal() {
+  if (landingCheckoutPollTimer) {
+    clearInterval(landingCheckoutPollTimer);
+    landingCheckoutPollTimer = null;
+  }
+  landingActiveCheckoutOrderId = null;
+  const modal = document.getElementById('checkoutModal');
+  if (modal) {
+    modal.classList.remove('open');
+    modal.setAttribute('hidden', '');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+  if (!document.getElementById('authModal')?.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
+}
+
+function openCheckoutModal() {
+  const modal = document.getElementById('checkoutModal');
+  if (!modal) return;
+  modal.removeAttribute('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  clearCheckoutAlert();
+  document.getElementById('checkoutPaidSuccess')?.setAttribute('hidden', '');
+  document.getElementById('checkoutPaymentActions')?.removeAttribute('hidden');
+}
+
+function renderCheckoutPayment(payment, message) {
+  openCheckoutModal();
+  const subtitle = document.getElementById('checkoutModalSubtitle');
+  if (subtitle) subtitle.textContent = message || 'Selesaikan pembayaran QRIS untuk mengaktifkan paket.';
+
+  const pkgName = document.getElementById('checkoutPackageName');
+  const amount = document.getElementById('checkoutAmountLabel');
+  const expires = document.getElementById('checkoutExpiresLabel');
+  if (pkgName) pkgName.textContent = payment?.package?.name || '—';
+  if (amount) amount.textContent = payment?.amount_label || '—';
+  if (expires) expires.textContent = payment?.expires_at_label || '—';
+
+  const link = document.getElementById('checkoutPaymentLink');
+  if (link) {
+    const url = payment?.payment_page_url;
+    if (url) {
+      link.href = url;
+      link.removeAttribute('hidden');
+    } else {
+      link.setAttribute('hidden', '');
+    }
+  }
+
+  const simBtn = document.getElementById('checkoutSimulateBtn');
+  if (simBtn) {
+    if (payment?.simulate_available) {
+      simBtn.removeAttribute('hidden');
+    } else {
+      simBtn.setAttribute('hidden', '');
+    }
+  }
+
+  landingActiveCheckoutOrderId = payment?.order_id || null;
+  if (landingActiveCheckoutOrderId) {
+    pollClientCheckoutStatus(landingActiveCheckoutOrderId);
+  }
+}
+
+function pollClientCheckoutStatus(orderId) {
+  if (landingCheckoutPollTimer) clearInterval(landingCheckoutPollTimer);
+  landingCheckoutPollTimer = setInterval(() => {
+    refreshClientCheckoutStatus(orderId, { quiet: true });
+  }, 4000);
+}
+
+async function refreshClientCheckoutStatus(orderId, options = {}) {
+  const { quiet = false } = options;
+  try {
+    const response = await fetch(`${clientCheckoutStatusUrl}/${encodeURIComponent(orderId)}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    const payment = data.payment;
+    if (payment?.status === 'paid') {
+      if (landingCheckoutPollTimer) {
+        clearInterval(landingCheckoutPollTimer);
+        landingCheckoutPollTimer = null;
+      }
+      document.getElementById('checkoutPaymentActions')?.setAttribute('hidden', '');
+      document.getElementById('checkoutPaidSuccess')?.removeAttribute('hidden');
+      if (!quiet) showCheckoutAlert('Pembayaran berhasil.', 'success');
+    }
+  } catch {
+    if (!quiet) showCheckoutAlert('Gagal memeriksa status pembayaran.', 'error');
+  }
+}
+
+async function simulateClientCheckout() {
+  if (!landingActiveCheckoutOrderId) return;
+  const btn = document.getElementById('checkoutSimulateBtn');
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Memproses…';
+  }
+  try {
+    const response = await fetch(`${clientCheckoutSimulateUrl}/${encodeURIComponent(landingActiveCheckoutOrderId)}/simulate`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      showCheckoutAlert(data.message || 'Simulasi gagal.', 'error');
+      return;
+    }
+    await refreshClientCheckoutStatus(landingActiveCheckoutOrderId);
+  } catch {
+    showCheckoutAlert('Gagal simulasi pembayaran.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Simulasikan pembayaran (sandbox)';
+    }
+  }
+}
+
+async function startClientCheckout(packageId) {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  clearCheckoutAlert();
+  openCheckoutModal();
+  const subtitle = document.getElementById('checkoutModalSubtitle');
+  if (subtitle) subtitle.textContent = 'Menyiapkan pembayaran…';
+
+  try {
+    const response = await fetch(clientCheckoutUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        package_id: packageId,
+        application_slug: landingApplicationSlug(),
+        referral_code: landingReferralCode() || undefined,
+      }),
+    });
+    const { ok, data } = await readJsonResponse(response);
+    if (!ok) {
+      showCheckoutAlert(data.message || 'Checkout gagal.', 'error');
+      const subtitle = document.getElementById('checkoutModalSubtitle');
+      if (subtitle) subtitle.textContent = 'Pembayaran tidak dapat dibuat';
+      return;
+    }
+    renderCheckoutPayment(data.payment, data.message);
+  } catch {
+    showCheckoutAlert('Gagal membuat checkout. Periksa koneksi lalu coba lagi.', 'error');
+  }
+}
+
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // SMOOTH SCROLL
@@ -152,24 +661,48 @@ function revealOnScroll() {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MODAL
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-function openModal(tab = 'login', role = null) {
+function initGoogleAuthUi() {
+  const wrap = document.getElementById('authGoogleWrap');
+  if (wrap) wrap.hidden = !googleLoginEnabled;
+}
+
+function startGoogleAuth() {
+  if (!googleLoginEnabled || !googleAuthRedirectUrl) return;
+  const params = new URLSearchParams();
+  params.set('return', `${window.location.pathname}${window.location.search}`);
+  try {
+    const raw = sessionStorage.getItem(LANDING_INTENT_KEY);
+    if (raw) {
+      const intent = JSON.parse(raw);
+      if (intent?.type) params.set('intent', intent.type);
+      if (intent?.package_id) params.set('package_id', String(intent.package_id));
+    }
+  } catch {
+    // ignore
+  }
+  window.location.href = `${googleAuthRedirectUrl}?${params.toString()}`;
+}
+
+function openModal(tab = 'login') {
   const modal = document.getElementById('authModal');
+  if (!modal) return;
+  modal.removeAttribute('hidden');
+  modal.setAttribute('aria-hidden', 'false');
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
   clearAuthAlert();
   switchTab(tab);
-  if (role === 'affiliate' && tab === 'register') {
-    setTimeout(() => {
-      const btns = document.querySelectorAll('#registerForm .role-btn');
-      btns.forEach(b => b.classList.remove('active'));
-      if (btns[1]) { btns[1].classList.add('active'); updateRegisterRole('Affiliate'); }
-    }, 50);
-  }
 }
 function closeModal() {
   const modal = document.getElementById('authModal');
+  if (!modal) return;
   modal.classList.remove('open');
-  document.body.style.overflow = '';
+  modal.setAttribute('hidden', '');
+  modal.setAttribute('aria-hidden', 'true');
+  if (!document.getElementById('checkoutModal')?.classList.contains('open')
+    && !document.getElementById('appDialogModal')?.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
 }
 function switchTab(tab) {
   document.getElementById('tabLogin').classList.toggle('active', tab === 'login');
@@ -177,27 +710,6 @@ function switchTab(tab) {
   document.getElementById('loginForm').style.display = tab === 'login' ? 'block' : 'none';
   document.getElementById('registerForm').style.display = tab === 'register' ? 'block' : 'none';
 }
-function selectRole(el, form) {
-  const parent = el.parentElement;
-  parent.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
-  el.classList.add('active');
-  if (form === 'register') updateRegisterRole(el.textContent.trim());
-}
-function updateRegisterRole(role) {
-  const company = document.getElementById('companyField');
-  const companyInput = document.getElementById('registerCompany');
-  const btn = document.getElementById('registerBtn');
-  const isClient = role === 'Client';
-  company.style.display = isClient ? 'block' : 'none';
-  if (companyInput) companyInput.required = isClient;
-  btn.textContent = role === 'Affiliate' ? 'Daftar Sebagai Affiliate' : 'Daftar Sekarang';
-}
-
-function getSelectedRegisterRole() {
-  const active = document.querySelector('#registerForm .role-selector .role-btn.active');
-  return active ? active.textContent.trim() : 'Client';
-}
-
 function showAuthAlert(message, type = 'error') {
   const alert = document.getElementById('authAlert');
   if (!alert) return;
@@ -279,19 +791,244 @@ function clearAuthAlert() {
   hideVerificationResend();
 }
 
+function markClientDashboardReady() {
+  document.getElementById('dashClient')?.classList.add('is-ready');
+}
+
+function isPublicMarketingMode() {
+  return appMode === 'landing' || appMode === 'hub';
+}
+
+function goToClientDashboard() {
+  window.location.href = clientDashboardUrl;
+}
+
+function updatePublicAuthUI(client) {
+  const loggedIn = !!client;
+
+  document.querySelectorAll('[data-auth-guest]').forEach((el) => {
+    el.hidden = loggedIn;
+  });
+  document.querySelectorAll('[data-auth-user]').forEach((el) => {
+    el.hidden = !loggedIn;
+  });
+
+  if (document.getElementById('pricingGrid')) {
+    renderPricing();
+  }
+}
+
 function updateClientDashboard(client) {
-  const overview = document.getElementById('client-overview');
-  if (!overview || !client) return;
+  if (!client) return;
 
-  const headerTitle = overview.querySelector('.dash-header h1');
-  if (headerTitle) headerTitle.textContent = `Selamat Datang, ${client.company_name}`;
+  clientSession = client;
+  markClientDashboardReady();
+  if (isPublicMarketingMode()) {
+    updatePublicAuthUI(client);
+  }
 
-  const companyInput = document.getElementById('clientSettingsCompany');
+  const headerTitle = document.getElementById('clientOverviewTitle')
+    || document.getElementById('client-overview')?.querySelector('.dash-header h1');
+  const displayName = client.name || client.company_name || 'Client';
+  if (headerTitle) headerTitle.textContent = `Selamat Datang, ${displayName}`;
+
+  const nameInput = document.getElementById('clientSettingsName');
   const emailInput = document.getElementById('clientSettingsEmail');
   const waInput = document.getElementById('clientSettingsWhatsapp');
-  if (companyInput) companyInput.value = client.company_name;
+  if (nameInput) nameInput.value = displayName;
   if (emailInput) emailInput.value = client.email;
   if (waInput) waInput.value = client.whatsapp;
+
+  if (client.affiliate?.active) {
+    const refEl = document.getElementById('clientRefLinkText');
+    if (refEl && client.affiliate.referral_url) refEl.textContent = client.affiliate.referral_url;
+  }
+
+  if (client.can_enroll_affiliate && document.getElementById('client-affiliate-overview')?.classList.contains('active')) {
+    setClientAffiliateOverviewMode('enroll');
+  }
+}
+
+function setClientAffiliateOverviewMode(mode) {
+  const enroll = document.getElementById('clientAffiliateEnrollCard');
+  const dashboard = document.getElementById('clientAffiliateDashboard');
+  const subtitle = document.getElementById('clientAffiliateOverviewSubtitle');
+  if (enroll) enroll.hidden = mode !== 'enroll';
+  if (dashboard) dashboard.hidden = mode !== 'dashboard';
+  if (subtitle) {
+    subtitle.textContent = mode === 'enroll'
+      ? 'Aktifkan untuk mendapatkan link referral'
+      : 'Pantau performa referral Anda';
+  }
+}
+
+function copyClientRefLink() {
+  const text = document.getElementById('clientRefLinkText')?.textContent?.trim();
+  if (!text || text === '—') return;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('clientCopyBtnText');
+    if (btn) {
+      btn.textContent = 'Tersalin!';
+      setTimeout(() => { btn.textContent = 'Salin'; }, 2000);
+    }
+  }).catch(() => {});
+}
+
+function affiliateStatusBadge(status) {
+  const map = {
+    paid: 'badge-paid',
+    pending: 'badge-pending',
+    active: 'badge-active',
+  };
+  return map[status] || 'badge-pending';
+}
+
+function renderClientAffiliatePagination(pagination) {
+  const wrap = document.getElementById('clientAffiliatePagination');
+  if (!wrap) return;
+
+  if (!pagination || pagination.last_page <= 1) {
+    wrap.hidden = true;
+    wrap.innerHTML = '';
+    return;
+  }
+
+  wrap.hidden = false;
+  const { current_page: current, last_page: last } = pagination;
+
+  let pages = '';
+  for (let p = 1; p <= last; p += 1) {
+    if (last > 7 && p > 2 && p < last - 1 && Math.abs(p - current) > 1) {
+      if (p === 3 || p === last - 2) pages += '<span class="dash-pagination-ellipsis">…</span>';
+      continue;
+    }
+    pages += `<button type="button" class="dash-pagination-btn${p === current ? ' active' : ''}" onclick="loadClientAffiliate(${p})">${p}</button>`;
+  }
+
+  wrap.innerHTML = `
+    <button type="button" class="dash-pagination-btn" ${current <= 1 ? 'disabled' : ''} onclick="loadClientAffiliate(${current - 1})">Sebelumnya</button>
+    <div class="dash-pagination-pages">${pages}</div>
+    <button type="button" class="dash-pagination-btn" ${current >= last ? 'disabled' : ''} onclick="loadClientAffiliate(${current + 1})">Berikutnya</button>`;
+}
+
+async function loadClientAffiliate(page = clientAffiliatePage) {
+  clientAffiliatePage = Math.max(1, page);
+  const referralsBody = document.getElementById('clientAffiliateReferralsBody');
+  const metaEl = document.getElementById('clientAffiliateTableMeta');
+  if (!referralsBody && !document.getElementById('clientAffiliateEnrollCard')) return;
+
+  const loading = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">Memuat…</td></tr>';
+  if (referralsBody) referralsBody.innerHTML = loading;
+  if (metaEl) metaEl.textContent = '';
+
+  try {
+    const url = `${clientAffiliateUrl}?page=${clientAffiliatePage}&per_page=${CLIENT_AFFILIATE_PER_PAGE}`;
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      const msg = data.message || 'Gagal memuat data affiliate.';
+      setClientAffiliateOverviewMode('enroll');
+      if (referralsBody) referralsBody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">${escapeHtml(msg)}</td></tr>`;
+      renderClientAffiliatePagination(null);
+      return;
+    }
+
+    if (!data.enabled) {
+      setClientAffiliateOverviewMode('enroll');
+      const errEl = document.getElementById('clientAffiliateEnrollError');
+      if (errEl) errEl.hidden = true;
+      renderClientAffiliatePagination(null);
+      return;
+    }
+
+    setClientAffiliateOverviewMode('dashboard');
+
+    const summary = data.summary || {};
+    const salesEl = document.getElementById('clientAffiliateStatSales');
+    const totalEl = document.getElementById('clientAffiliateStatTotal');
+    const pendingEl = document.getElementById('clientAffiliateStatPending');
+    if (salesEl) salesEl.textContent = String(summary.sales_count ?? 0);
+    if (totalEl) totalEl.textContent = summary.total_commission_label || '—';
+    if (pendingEl) pendingEl.textContent = summary.pending_commission_label || '—';
+
+    const refEl = document.getElementById('clientRefLinkText');
+    if (refEl && summary.referral_url) refEl.textContent = summary.referral_url;
+
+    const rows = (data.referrals || []).map((row) => `
+      <tr>
+        <td class="td-bold">${escapeHtml(row.customer_name || '—')}</td>
+        <td>${escapeHtml(row.customer_email || '—')}</td>
+        <td>${escapeHtml(row.application_name || '—')}</td>
+        <td>${escapeHtml(row.package_name || '—')}</td>
+        <td>${escapeHtml(row.amount_label || '—')}</td>
+        <td class="${row.status === 'paid' ? 'td-green' : 'td-amber'}">${escapeHtml(row.commission_label || '—')}</td>
+        <td>${escapeHtml(row.date || '—')}</td>
+        <td><span class="badge ${affiliateStatusBadge(row.status)}">${escapeHtml(row.status_label || row.status || '—')}</span></td>
+      </tr>`).join('');
+
+    const empty = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">Belum ada referral.</td></tr>';
+    if (referralsBody) referralsBody.innerHTML = rows || empty;
+
+    const p = data.pagination;
+    if (metaEl && p?.total) {
+      metaEl.textContent = `Menampilkan ${p.from ?? 0}–${p.to ?? 0} dari ${p.total} referral`;
+    }
+    renderClientAffiliatePagination(p);
+  } catch {
+    setClientAffiliateOverviewMode('enroll');
+    if (referralsBody) referralsBody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">Gagal memuat.</td></tr>';
+    renderClientAffiliatePagination(null);
+  }
+}
+
+async function enrollClientAffiliate() {
+  const btn = document.getElementById('clientAffiliateEnrollBtn');
+  const errEl = document.getElementById('clientAffiliateEnrollError');
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Mengaktifkan…';
+  }
+  if (errEl) errEl.hidden = true;
+
+  try {
+    const response = await fetch(clientAffiliateEnrollUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (errEl) {
+        errEl.hidden = false;
+        errEl.textContent = data.message || 'Gagal mengaktifkan affiliate.';
+      }
+      return;
+    }
+
+    await restoreClientSession();
+    clientAffiliatePage = 1;
+    await loadClientAffiliate(1);
+  } catch {
+    if (errEl) {
+      errEl.hidden = false;
+      errEl.textContent = 'Tidak dapat menghubungi server.';
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Aktifkan sekarang';
+    }
+  }
 }
 
 function formatLicenseDate(iso) {
@@ -309,15 +1046,303 @@ function formatLicenseDate(iso) {
   }
 }
 
-async function loadClientLicense() {
-  const quotaEl = document.getElementById('clientLicenseQuota');
-  const hintEl = document.getElementById('clientLicenseHint');
-  const tbody = document.getElementById('clientLicenseDevices');
-  if (!tbody) return;
+function clientPurchaseStatusBadge(status) {
+  const map = {
+    active: ['Aktif', 'badge-active'],
+    trial: ['Trial', 'badge-trial'],
+    expired: ['Expired', 'badge-expired'],
+    inactive: ['Nonaktif', 'badge-expired'],
+  };
+  return map[status] || [status || '—', 'badge-pending'];
+}
 
-  if (quotaEl) quotaEl.textContent = '…';
-  if (hintEl) hintEl.textContent = 'Memuat data lisensi…';
-  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Memuat…</td></tr>';
+function clientLicenseIsExpired(expiresAt) {
+  const days = clientDaysRemaining(expiresAt);
+  if (days === '—') return false;
+  return Number(days) <= 0;
+}
+
+function clientLicenseStatusForDisplay(app) {
+  if (app?.is_expired || clientLicenseIsExpired(app?.expires_at)) {
+    return 'expired';
+  }
+  return app?.license_status || app?.purchase_status || '';
+}
+
+function formatClientDateOnly(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return '—';
+  }
+}
+
+function clientLicenseDaysLabel(expiresAt) {
+  const days = clientDaysRemaining(expiresAt);
+  if (days === '—') return '—';
+  const n = Number(days);
+  if (n <= 0) return 'Sudah kedaluwarsa';
+  return `${n} hari lagi`;
+}
+
+function renderClientLicenseDeviceRow(appName, device) {
+  const ip = escapeHtml(device.ip || '—');
+  const host = escapeHtml(device.hostname || device.computer || '—');
+  const platform = escapeHtml(device.platform || '—');
+  const location = escapeHtml(device.location || '—');
+  const appLabel = escapeHtml(appName || '—');
+
+  return `<tr>
+    <td class="td-bold">${host}</td>
+    <td class="td-mono">${ip}</td>
+    <td>${platform}</td>
+    <td>${location}</td>
+    <td>${formatLicenseDate(device.activated_at)}</td>
+    <td>
+      <button type="button" class="btn btn-secondary client-license-deactivate" data-ip="${ip}" data-host="${host}" onclick="deactivateClientDevice(${Number(device.id)}, this)">Lepas perangkat</button>
+    </td>
+  </tr>`;
+}
+
+function renderClientLicenseAppCard(app) {
+  const [statusLabel, badgeClass] = clientPurchaseStatusBadge(clientLicenseStatusForDisplay(app));
+  const packageName = escapeHtml(app.package?.name || '—');
+  const appName = escapeHtml(app.name || '—');
+  const maxDevices = Number(app.devices_max ?? app.package?.devices_quota ?? 0);
+  const activeDevices = Number(
+    app.devices_active ?? (app.devices ? app.devices.length : 0),
+  );
+  const quotaLabel = maxDevices
+    ? `${activeDevices} / ${maxDevices} aktif`
+    : `${activeDevices} aktif`;
+  const durationDays = app.package?.duration_days
+    ? `${app.package.duration_days} hari`
+    : '—';
+
+  const devices = app.devices || [];
+  const deviceBody = devices.length
+    ? devices.map((device) => renderClientLicenseDeviceRow(app.name, device)).join('')
+    : `<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px;">Belum ada perangkat aktif. Aktivasi dari aplikasi desktop: Settings → Lisensi → Activate.</td></tr>`;
+
+  return `<article class="client-license-app-card">
+    <header class="client-license-app-head">
+      <div>
+        <div class="client-license-app-title-row">
+          <h2 class="client-license-app-title">${appName}</h2>
+          <span class="client-license-app-package">${packageName}</span>
+        </div>
+      </div>
+      <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+    </header>
+    <div class="client-license-app-meta">
+      <div class="client-license-meta-item">
+        <div class="client-license-meta-label">Dibeli / mulai</div>
+        <div class="client-license-meta-value">${formatClientDateOnly(app.purchased_at)}</div>
+      </div>
+      <div class="client-license-meta-item">
+        <div class="client-license-meta-label">Berlaku hingga</div>
+        <div class="client-license-meta-value">${formatClientDateOnly(app.expires_at)}</div>
+      </div>
+      <div class="client-license-meta-item">
+        <div class="client-license-meta-label">Durasi paket</div>
+        <div class="client-license-meta-value">${escapeHtml(durationDays)}</div>
+      </div>
+      <div class="client-license-meta-item">
+        <div class="client-license-meta-label">Sisa masa aktif</div>
+        <div class="client-license-meta-value">${escapeHtml(clientLicenseDaysLabel(app.expires_at))}</div>
+      </div>
+      <div class="client-license-meta-item">
+        <div class="client-license-meta-label">Kuota perangkat</div>
+        <div class="client-license-meta-value">${escapeHtml(quotaLabel)}</div>
+      </div>
+    </div>
+    <section class="client-license-devices">
+      <div class="client-license-devices-head">Perangkat teraktivasi</div>
+      <div class="dash-table-wrap">
+        <table class="dash-table">
+          <thead>
+            <tr>
+              <th>Komputer</th>
+              <th>IP</th>
+              <th>Platform</th>
+              <th>Lokasi</th>
+              <th>Diaktifkan</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>${deviceBody}</tbody>
+        </table>
+      </div>
+    </section>
+  </article>`;
+}
+
+function renderClientLicenseApplications(applications) {
+  const container = document.getElementById('clientLicenseApps');
+  if (!container) return;
+
+  if (!applications.length) {
+    container.innerHTML = `<div class="client-license-empty dash-form-card">
+      Belum ada aplikasi yang ditetapkan ke akun Anda. Hubungi admin atau selesaikan pembelian dari halaman harga.
+    </div>`;
+    return;
+  }
+
+  const sorted = [...applications].sort((a, b) => {
+    const aExpired = clientLicenseStatusForDisplay(a) === 'expired' ? 0 : 1;
+    const bExpired = clientLicenseStatusForDisplay(b) === 'expired' ? 0 : 1;
+    return aExpired - bExpired;
+  });
+
+  container.innerHTML = sorted.map((app) => renderClientLicenseAppCard(app)).join('');
+}
+
+function clientDaysRemaining(expiresAt) {
+  if (!expiresAt) return '—';
+  const end = new Date(expiresAt);
+  if (Number.isNaN(end.getTime())) return '—';
+  const days = Math.ceil((end.getTime() - Date.now()) / 86400000);
+  if (days < 0) return '0';
+  return String(days);
+}
+
+function clientOverviewActiveLicenseCount(applications) {
+  return (applications || []).filter((app) => clientLicenseStatusForDisplay(app) !== 'expired').length;
+}
+
+function clientOverviewExpiredLicenseCount(applications) {
+  return (applications || []).filter((app) => clientLicenseStatusForDisplay(app) === 'expired').length;
+}
+
+function clientOverviewAppAvatarHtml(app) {
+  const logoUrl = String(app?.logo_url || '').trim();
+  const initial = escapeHtml((app?.name || 'A').trim().charAt(0).toUpperCase());
+  if (logoUrl) {
+    return `<div class="client-overview-app-avatar client-overview-app-avatar--logo"><img src="${escapeHtml(logoUrl)}" alt="" loading="lazy" decoding="async"></div>`;
+  }
+  return `<div class="client-overview-app-avatar">${initial}</div>`;
+}
+
+function renderClientOverviewAppCard(app) {
+  const [statusLabel, badgeClass] = clientPurchaseStatusBadge(clientLicenseStatusForDisplay(app));
+  const maxDevices = Number(app.devices_max ?? app.package?.devices_quota ?? 0);
+  const activeDevices = Number(app.devices_active ?? (app.devices ? app.devices.length : 0));
+  const deviceLabel = maxDevices
+    ? `${activeDevices} / ${maxDevices} perangkat`
+    : `${activeDevices} perangkat`;
+  const appName = escapeHtml(app.name || 'Aplikasi');
+  const packageName = escapeHtml(app.package?.name || '—');
+  const expiresLabel = formatClientDateOnly(app.expires_at);
+  const sisaLabel = clientLicenseStatusForDisplay(app) === 'expired'
+    ? 'Expired'
+    : clientLicenseDaysLabel(app.expires_at);
+
+  return `<article class="client-overview-app-card" role="button" tabindex="0" onclick="switchDashPage('client','license',document.querySelector('#dashClient .dash-nav-item[onclick*=license]'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
+    <div class="client-overview-app-card-accent" aria-hidden="true"></div>
+    <div class="client-overview-app-card-inner">
+      <header class="client-overview-app-card-head">
+        ${clientOverviewAppAvatarHtml(app)}
+        <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
+      </header>
+      <h4 class="client-overview-app-name">${appName}</h4>
+      <p class="client-overview-app-package">${packageName}</p>
+      <ul class="client-overview-app-meta">
+        <li><span>Berlaku</span><strong>${expiresLabel}</strong></li>
+        <li><span>Sisa</span><strong>${escapeHtml(sisaLabel)}</strong></li>
+        <li><span>Perangkat</span><strong>${escapeHtml(deviceLabel)}</strong></li>
+      </ul>
+    </div>
+  </article>`;
+}
+
+function renderClientOverviewDashboard(licensePayload) {
+  const applications = licensePayload?.applications || [];
+  const activeDevices = applications.reduce(
+    (sum, app) => sum + Number(app.devices_active ?? (app.devices ? app.devices.length : 0)),
+    0,
+  );
+  const activeLicenses = clientOverviewActiveLicenseCount(applications);
+  const expiredLicenses = clientOverviewExpiredLicenseCount(applications);
+
+  const statActive = document.getElementById('clientOverviewStatActive');
+  const statActiveHint = document.getElementById('clientOverviewStatActiveHint');
+  const statDevices = document.getElementById('clientOverviewStatDevices');
+  const statExpired = document.getElementById('clientOverviewStatExpired');
+  const appsGrid = document.getElementById('clientOverviewAppsGrid');
+
+  if (statActive) statActive.textContent = applications.length ? String(activeLicenses) : '0';
+  if (statActiveHint) {
+    if (!applications.length) {
+      statActiveHint.textContent = 'Belum ada aplikasi';
+    } else if (applications.length > 1) {
+      statActiveHint.textContent = `dari ${applications.length} aplikasi`;
+    } else {
+      statActiveHint.textContent = '';
+    }
+  }
+  if (statDevices) statDevices.textContent = String(activeDevices);
+  if (statExpired) statExpired.textContent = applications.length ? String(expiredLicenses) : '0';
+
+  if (appsGrid) {
+    if (!applications.length) {
+      appsGrid.innerHTML = `<div class="client-overview-empty dash-form-card">Belum ada aplikasi pada akun ini. Hubungi admin atau selesaikan pembelian dari halaman harga.</div>`;
+    } else {
+      appsGrid.innerHTML = applications.map((app) => renderClientOverviewAppCard(app)).join('');
+    }
+  }
+}
+
+function hydrateClientOverviewFromBoot() {
+  if (appMode !== 'client' || !bootInitialClientLicense) return;
+  if (!document.getElementById('client-overview')?.classList.contains('active')) return;
+  renderClientOverviewDashboard(bootInitialClientLicense);
+}
+
+async function loadClientOverview() {
+  const overview = document.getElementById('client-overview');
+  if (!overview?.classList.contains('active')) return;
+
+  const appsGrid = document.getElementById('clientOverviewAppsGrid');
+  const hadCards = !!appsGrid?.querySelector('.client-overview-app-card');
+  if (appsGrid && !hadCards) {
+    appsGrid.innerHTML = '<div class="client-overview-loading">Memuat…</div>';
+  }
+
+  try {
+    const response = await fetch(clientLicenseUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    if (!response.ok) {
+      if (appsGrid && !hadCards) {
+        appsGrid.innerHTML = '<div class="client-overview-empty dash-form-card">Gagal memuat data lisensi. Muat ulang halaman.</div>';
+      }
+      return;
+    }
+    const data = await response.json();
+    renderClientOverviewDashboard(data.license || {});
+  } catch {
+    if (appsGrid && !hadCards) {
+      appsGrid.innerHTML = '<div class="client-overview-empty dash-form-card">Gagal memuat data lisensi. Periksa koneksi lalu muat ulang.</div>';
+    }
+  }
+}
+
+async function loadClientLicense(options = {}) {
+  const { background = false } = options;
+  const appsEl = document.getElementById('clientLicenseApps');
+  if (!appsEl) return;
+
+  const hadContent = !!appsEl.querySelector('.client-license-app-card, .client-license-empty');
+
+  if (!background) {
+    appsEl.innerHTML = '<div class="client-license-loading">Memuat…</div>';
+  }
 
   try {
     const response = await fetch(clientLicenseUrl, {
@@ -327,52 +1352,73 @@ async function loadClientLicense() {
     const data = await response.json();
 
     if (!response.ok) {
-      if (hintEl) hintEl.textContent = data.message || 'Gagal memuat lisensi.';
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Tidak ada data.</td></tr>';
+      if (!background) {
+        appsEl.innerHTML = '<div class="client-license-empty">Tidak ada data lisensi.</div>';
+      }
       return;
     }
 
     const license = data.license || {};
     const applications = license.applications || [];
-    const totalApps = applications.length;
-    const totalDevices = applications.reduce((sum, app) => sum + Number(app.devices_active ?? 0), 0);
 
-    if (quotaEl) quotaEl.textContent = `${totalApps} aplikasi · ${totalDevices} perangkat aktif`;
-    if (hintEl) {
-      hintEl.textContent = !totalApps
-        ? 'Belum ada aplikasi yang ditetapkan ke akun Anda. Hubungi admin untuk menambahkan aplikasi yang dibeli.'
-        : 'Aktivasi perangkat dilakukan dari aplikasi desktop masing-masing (Settings → Lisensi → Activate).';
-    }
-
-    const rows = [];
-    applications.forEach((app) => {
-      (app.devices || []).forEach((device) => {
-        const ip = escapeHtml(device.ip || '—');
-        const host = escapeHtml(device.hostname || device.computer || '—');
-        const platform = escapeHtml(device.platform || '—');
-        const appName = escapeHtml(app.name || '—');
-        rows.push(`<tr>
-          <td class="td-bold">${appName}</td>
-          <td class="td-mono">${ip}</td>
-          <td>${host}</td>
-          <td>${platform}</td>
-          <td>${formatLicenseDate(device.activated_at)}</td>
-          <td><span class="badge badge-active">Active</span></td>
-          <td><button type="button" class="btn btn-secondary" style="padding:6px 12px;font-size:12px;color:var(--rose);" data-ip="${ip}" data-host="${host}" onclick="deactivateClientDevice(${Number(device.id)}, this)">Deactivate</button></td>
-        </tr>`);
-      });
-    });
-
-    if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">${totalApps ? 'Belum ada perangkat aktif untuk aplikasi yang dibeli.' : 'Belum ada aplikasi yang dibeli.'}</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = rows.join('');
+    renderClientLicenseApplications(applications);
   } catch {
-    if (hintEl) hintEl.textContent = 'Tidak dapat menghubungi server.';
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);">Gagal memuat.</td></tr>';
+    if (!background) {
+      appsEl.innerHTML = '<div class="client-license-empty">Gagal memuat.</div>';
+    } else if (!hadContent) {
+      appsEl.innerHTML = '<div class="client-license-empty">Gagal memuat.</div>';
+    }
   }
+}
+
+function openPendingClientCheckout(order) {
+  if (!order?.order_id) return;
+  renderCheckoutPayment(
+    {
+      order_id: order.order_id,
+      package: { name: order.package_name || '—' },
+      amount_label: order.amount_label,
+      expires_at_label: order.expires_at_label,
+      payment_page_url: order.payment_page_url,
+      simulate_available: order.simulate_available,
+    },
+    'Selesaikan pembayaran yang masih pending.',
+  );
+}
+
+function openPendingClientCheckoutByIndex(index) {
+  const order = clientBillingPendingCache[Number(index)];
+  if (order) openPendingClientCheckout(order);
+}
+
+function renderClientBillingPendingOrders(orders) {
+  const wrap = document.getElementById('clientBillingPending');
+  if (!wrap) return;
+
+  clientBillingPendingCache = orders;
+
+  if (!orders.length) {
+    wrap.hidden = true;
+    wrap.innerHTML = '';
+    return;
+  }
+
+  wrap.hidden = false;
+  wrap.innerHTML = `
+    <div class="dash-form-card client-billing-pending">
+      <h3>Pembayaran belum selesai</h3>
+      <ul class="client-billing-pending-list">
+        ${orders.map((order, index) => `
+          <li class="client-billing-pending-item">
+            <div>
+              <strong>${escapeHtml(order.application_name || 'Aplikasi')} — ${escapeHtml(order.package_name || 'Paket')}</strong>
+              <span class="client-billing-pending-meta">${escapeHtml(order.amount_label || '')}${order.expires_at_label ? ` · Kedaluwarsa ${escapeHtml(order.expires_at_label)}` : ''}</span>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="openPendingClientCheckoutByIndex(${index})">Lanjutkan bayar</button>
+          </li>
+        `).join('')}
+      </ul>
+    </div>`;
 }
 
 async function loadClientBilling() {
@@ -382,6 +1428,7 @@ async function loadClientBilling() {
 
   if (countEl) countEl.textContent = 'Memuat…';
   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
+  renderClientBillingPendingOrders([]);
 
   try {
     const response = await fetch(clientTransactionsUrl, {
@@ -395,6 +1442,8 @@ async function loadClientBilling() {
       tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:28px;">${escapeHtml(data.message || 'Gagal memuat riwayat pembayaran.')}</td></tr>`;
       return;
     }
+
+    renderClientBillingPendingOrders(data.pending_orders || []);
 
     const transactions = data.transactions || [];
 
@@ -462,6 +1511,8 @@ function openAppDialog(options = {}) {
       cancelBtn.style.display = type === 'alert' ? 'none' : '';
     }
 
+    modal.removeAttribute('hidden');
+    modal.setAttribute('aria-hidden', 'false');
     modal.classList.add('open');
     document.body.style.overflow = 'hidden';
   });
@@ -469,8 +1520,15 @@ function openAppDialog(options = {}) {
 
 function closeAppDialog(result) {
   const modal = document.getElementById('appDialogModal');
-  if (modal) modal.classList.remove('open');
-  document.body.style.overflow = '';
+  if (modal) {
+    modal.classList.remove('open');
+    modal.setAttribute('hidden', '');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+  if (!document.getElementById('authModal')?.classList.contains('open')
+    && !document.getElementById('checkoutModal')?.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
   if (appDialogResolver) {
     const resolve = appDialogResolver;
     appDialogResolver = null;
@@ -535,7 +1593,13 @@ async function deactivateClientDevice(deviceId, btn) {
   }
 }
 
-async function restoreClientSession() {
+async function restoreClientSession(options = {}) {
+  const redirectToDashboard = options.redirectToDashboard ?? appMode === 'client';
+
+  if (bootInitialClient) {
+    updateClientDashboard(bootInitialClient);
+  }
+
   try {
     const response = await fetch(clientMeUrl, {
       headers: { Accept: 'application/json' },
@@ -545,11 +1609,17 @@ async function restoreClientSession() {
 
     if (data.logged_in && data.client) {
       updateClientDashboard(data.client);
-      showClientDashboard(false);
+      if (redirectToDashboard) {
+        showClientDashboard(false);
+      }
       return true;
     }
   } catch {
     // Tetap tampilkan landing jika session tidak ada.
+  }
+
+  if (isPublicMarketingMode()) {
+    updatePublicAuthUI(null);
   }
 
   return false;
@@ -577,12 +1647,22 @@ function dashboardUrlFor(portal) {
 
 function resolveDashboardPage(portal) {
   const fromHash = parseRouteHash();
-  if (fromHash?.portal === portal) return fromHash.page;
+  if (fromHash?.portal === portal) {
+    return normalizeAdminPage(fromHash.page);
+  }
 
   const saved = getSavedRoute();
-  if (saved?.portal === portal) return saved.page;
+  if (saved?.portal === portal) {
+    return normalizeAdminPage(saved.page);
+  }
 
   return 'overview';
+}
+
+function normalizeAdminPage(page) {
+  if (page === 'clients') return 'users';
+  if (page === 'affiliate-referrals') return 'affiliate-overview';
+  return page;
 }
 
 function getSavedRoute() {
@@ -612,14 +1692,19 @@ function clearAppRoute() {
   }
 }
 
+function dashNavPageFromOnclick(onclick) {
+  const match = (onclick || '').match(/switchDashPage\s*\(\s*['"][^'"]+['"]\s*,\s*['"]([^'"]+)['"]/);
+  return match ? match[1] : null;
+}
+
 function activateSidebarNav(portal, page) {
   const dashMap = { client: 'dashClient', admin: 'dashAdmin', affiliate: 'dashAffiliate' };
   const dash = document.getElementById(dashMap[portal]);
   if (!dash) return;
 
   dash.querySelectorAll('.dash-nav-item').forEach((btn) => {
-    const onclick = btn.getAttribute('onclick') || '';
-    btn.classList.toggle('active', onclick.includes(`'${page}'`));
+    const navPage = dashNavPageFromOnclick(btn.getAttribute('onclick') || '');
+    btn.classList.toggle('active', navPage === page);
   });
 }
 
@@ -642,13 +1727,20 @@ function applyDashboardRoute(portal, page) {
   saveAppRoute(portal, page);
   window.scrollTo(0, 0);
 
+  if (portal === 'client' && page === 'overview') loadClientOverview();
   if (portal === 'client' && page === 'license') loadClientLicense();
   if (portal === 'client' && page === 'billing') loadClientBilling();
-  if (portal === 'admin' && page === 'clients') refreshAdminClientsTable();
+  if (portal === 'client' && page === 'affiliate-overview') loadClientAffiliate(clientAffiliatePage);
+  if (portal === 'admin' && (page === 'users' || page === 'clients')) refreshAdminUsersTable();
   if (portal === 'admin' && page === 'affiliates') refreshAdminAffiliatesTable();
   if (portal === 'admin' && page === 'commissions') refreshAdminCommissionsTable();
   if (portal === 'admin' && page === 'applications') refreshAdminApplicationsTable();
-  if (portal === 'admin' && page === 'licenses') refreshAdminLicensesTable();
+  if (portal === 'admin' && page === 'licenses') {
+    populateAdminLicenseApplicationFilter().then(() => {
+      bindAdminLicenseSearchInput();
+      refreshAdminLicensesTable();
+    });
+  }
   if (portal === 'admin' && page === 'transactions') {
     refreshAdminTransactionsTable();
     if (adminTransactionsActiveTab === 'invoices') refreshAdminPaymentOrdersTable();
@@ -664,35 +1756,84 @@ function applyDashboardRoute(portal, page) {
   }
 }
 
-async function initAppState() {
-  if (appMode === 'landing') {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('login')) openModal('login');
-    if (params.get('verified') === 'already') {
-      openModal('login');
-      showAuthAlert('Email sudah diverifikasi. Silakan login.', 'success');
-    }
-    return;
+function finishAppBoot() {
+  document.documentElement.classList.remove('app-booting');
+  const splash = document.getElementById('appBootSplash');
+  if (splash) {
+    splash.classList.add('is-hidden');
+    splash.setAttribute('aria-busy', 'false');
   }
+}
 
-  if (appMode === 'client') {
-    const clientLoggedIn = await restoreClientSession();
-    if (!clientLoggedIn) {
-      window.location.href = `${landingUrl}?login=client`;
+async function initAppState() {
+  try {
+    if (isPublicMarketingMode()) {
+      captureLandingReferralFromUrl();
+      initGoogleAuthUi();
+      if (bootPostOAuthIntent?.type) {
+        setLandingIntent(bootPostOAuthIntent.type, Number(bootPostOAuthIntent.package_id) || 0);
+      }
+      if (bootFlashAuthError) {
+        openModal('login');
+        showAuthAlert(bootFlashAuthError, 'error');
+      } else if (bootFlashAuthSuccess) {
+        showAuthAlert(bootFlashAuthSuccess, 'success');
+      }
+      if (bootInitialClient) {
+        updatePublicAuthUI(bootInitialClient);
+        clientSession = bootInitialClient;
+      }
+      const loggedIn = clientSession || (await restoreClientSession({ redirectToDashboard: false }));
+      if (loggedIn) {
+        await refreshLandingCommercePlans({ force: true });
+        await resumeLandingIntentAfterAuth();
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const wantsLogin = params.get('login');
+      if (wantsLogin && !clientSession) {
+        openModal('login');
+      }
+      if (params.get('verified') === 'already') {
+        if (!clientSession) openModal('login');
+        showAuthAlert('Email sudah diverifikasi. Silakan login.', 'success');
+      }
       return;
     }
-    applyDashboardRoute('client', resolveDashboardPage('client'));
-    return;
-  }
 
-  if (appMode === 'admin' || appMode === 'affiliate') {
-    applyDashboardRoute(appMode, resolveDashboardPage(appMode));
+    if (appMode === 'client') {
+      hydrateClientOverviewFromBoot();
+      const clientLoggedIn = await restoreClientSession();
+      if (!clientLoggedIn) {
+        window.location.href = `${landingUrl}?login=client`;
+        return;
+      }
+      applyDashboardRoute('client', resolveDashboardPage('client'));
+      return;
+    }
+
+    if (appMode === 'affiliate') {
+      window.location.replace(`${clientDashboardUrl}#/affiliate-overview`);
+      return;
+    }
+
+    if (appMode === 'admin') {
+      const adminLoggedIn = await restoreAdminSession();
+      if (!adminLoggedIn) {
+        showAdminLoginGate(true);
+        return;
+      }
+      showAdminLoginGate(false);
+      applyDashboardRoute('admin', resolveDashboardPage('admin'));
+    }
+  } finally {
+    finishAppBoot();
   }
 }
 
 function showClientDashboard(closeModalOnShow = true) {
   if (closeModalOnShow) closeModal();
-  if (appMode === 'landing') {
+  if (isPublicMarketingMode()) {
     window.location.href = clientDashboardUrl;
     return;
   }
@@ -710,7 +1851,7 @@ function showClientDashboard(closeModalOnShow = true) {
 
 function showDemoDashboard(role, closeModalOnShow = true) {
   if (closeModalOnShow) closeModal();
-  if (appMode === 'landing') {
+  if (isPublicMarketingMode()) {
     window.location.href = dashboardUrlFor(role);
     return;
   }
@@ -732,13 +1873,6 @@ function showDemoDashboard(role, closeModalOnShow = true) {
 async function submitClientLogin(event) {
   event.preventDefault();
   clearAuthAlert();
-
-  const role = getSelectedLoginRole();
-  if (role !== 'client') {
-    closeModal();
-    window.location.href = dashboardUrlFor(role);
-    return;
-  }
 
   const btn = document.getElementById('loginBtn');
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -777,7 +1911,11 @@ async function submitClientLogin(event) {
     }
 
     updateClientDashboard(data.client);
-    if (appMode === 'landing') {
+    closeModal();
+    if (isPublicMarketingMode()) {
+      await refreshLandingCommercePlans({ force: true });
+      const resumed = await resumeLandingIntentAfterAuth();
+      if (resumed) return;
       window.location.href = clientDashboardUrl;
       return;
     }
@@ -795,20 +1933,15 @@ async function submitClientRegistration(event) {
   event.preventDefault();
   clearAuthAlert();
 
-  const role = getSelectedRegisterRole();
-  if (role !== 'Client') {
-    showAuthAlert('Pendaftaran affiliate belum tersedia. Silakan pilih Client.');
-    return;
-  }
-
   const form = document.getElementById('registerForm');
   const btn = document.getElementById('registerBtn');
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const registerName = document.getElementById('registerName')?.value.trim();
   const payload = {
-    name: document.getElementById('registerName')?.value.trim(),
-    company_name: document.getElementById('registerCompany')?.value.trim(),
+    name: registerName,
+    company_name: registerName,
     email: document.getElementById('registerEmail')?.value.trim(),
-    whatsapp: document.getElementById('registerWhatsapp')?.value.trim(),
+    whatsapp: document.getElementById('registerWhatsapp')?.value.trim() || '',
     password: document.getElementById('registerPassword')?.value,
   };
   if (landingApplication?.id) {
@@ -829,9 +1962,9 @@ async function submitClientRegistration(event) {
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json();
+    const { ok, data } = await readJsonResponse(response);
 
-    if (!response.ok) {
+    if (!ok) {
       const firstError = data.errors
         ? Object.values(data.errors).flat()[0]
         : (data.message || 'Pendaftaran gagal.');
@@ -840,7 +1973,26 @@ async function submitClientRegistration(event) {
     }
 
     form.reset();
-    updateRegisterRole('Client');
+
+    if (data.logged_in && data.client) {
+      updateClientDashboard(data.client);
+      closeModal();
+      if (isPublicMarketingMode()) {
+        await refreshLandingCommercePlans({ force: true });
+        const resumed = await resumeLandingIntentAfterAuth();
+        if (!resumed) {
+          showAuthAlert(data.message, 'success');
+          if (data.requires_verification) {
+            showVerificationResend(data.email || payload.email);
+          }
+        }
+        return;
+      }
+      showClientDashboard(false);
+      applyDashboardRoute('client', 'overview');
+      return;
+    }
+
     switchTab('login');
     if (data.requires_verification) {
       showAuthAlert(data.message, 'warning');
@@ -868,11 +2020,6 @@ function toggleMobileMenu() {
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // LOGIN / LOGOUT / DASHBOARD NAV
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-function getSelectedLoginRole() {
-  const active = document.querySelector('#loginForm .role-selector .role-btn.active');
-  return active ? active.textContent.trim().toLowerCase() : 'client';
-}
-
 function doLogin() {
   document.getElementById('loginForm')?.requestSubmit();
 }
@@ -894,6 +2041,13 @@ async function doLogout() {
 
   clearAppRoute();
   localStorage.removeItem(DEMO_PORTAL_KEY);
+
+  adminSession = null;
+
+  if (appMode === 'admin') {
+    window.location.href = adminDashboardUrl;
+    return;
+  }
 
   if (appMode !== 'landing') {
     window.location.href = landingUrl;
@@ -922,9 +2076,14 @@ async function doLogout() {
 }
 
 function switchDashPage(portal, page, btn) {
+  const dashMap = { client: 'dashClient', admin: 'dashAdmin', affiliate: 'dashAffiliate' };
+  const dash = document.getElementById(dashMap[portal]);
+
+  if (dash) {
+    dash.querySelectorAll('.dash-nav-item').forEach((b) => b.classList.remove('active'));
+  }
+
   if (btn) {
-    const sidebar = btn.closest('.dash-nav');
-    sidebar.querySelectorAll('.dash-nav-item').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
   }
 
@@ -943,38 +2102,107 @@ function adminClientStatusBadge(status) {
   return map[status] || 'badge-pending';
 }
 
-function renderAdminClientsRows(clients) {
-  const tbody = document.getElementById('adminClientsTableBody');
-  const countEl = document.getElementById('adminClientsCount');
-  if (!tbody) return;
+function adminAffiliateStatusCell(user) {
+  if (!user.client_id) return '—';
+  if (user.affiliate_enabled) {
+    return '<span class="badge badge-active">Aktif</span>';
+  }
+  return '<span class="badge badge-expired">Nonaktif</span>';
+}
 
-  adminClientsCache = clients;
+function adminUserApplicationsCell(user) {
+  const apps = user.applications || [];
+  if (!apps.length) return '—';
+  const label = apps.length === 1 ? '1 aplikasi' : `${apps.length} aplikasi`;
+  return `<button type="button" class="btn btn-secondary" style="padding:2px 10px;font-size:11px;" onclick="showAdminUserApplications(${user.user_id})">${label}</button>`;
+}
 
-  if (countEl) {
-    countEl.textContent = `${clients.length} client terdaftar`;
+function parseAdminUserApplicationsFromRow(userId) {
+  const row = document.querySelector(`#adminUsersTableBody tr[data-user-id="${userId}"]`);
+  if (!row?.dataset?.applicationNames) return [];
+  try {
+    return JSON.parse(decodeURIComponent(row.dataset.applicationNames));
+  } catch {
+    return [];
+  }
+}
+
+async function showAdminUserApplications(userId) {
+  const user = adminUsersCache.find((item) => Number(item.user_id) === Number(userId));
+  let apps = user?.applications || [];
+
+  if (!apps.length) {
+    apps = parseAdminUserApplicationsFromRow(userId);
   }
 
-  if (!clients.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada client terdaftar.</td></tr>';
+  const title = user?.name
+    ? `Aplikasi — ${user.name}`
+    : 'Aplikasi client';
+
+  const message = apps.length
+    ? apps.map((name) => `• ${name}`).join('\n')
+    : 'Belum ada aplikasi terpasang.';
+
+  await openAppDialog({
+    type: 'alert',
+    title,
+    message,
+    okText: 'Tutup',
+  });
+}
+
+function adminUserRoleBadge(role) {
+  const map = {
+    super_admin: 'badge-active',
+    admin: 'badge-pending',
+    affiliate: 'badge-pending',
+    client: 'badge-active',
+  };
+  return map[role] || 'badge-pending';
+}
+
+function renderAdminUsersRows(users) {
+  const tbody = document.getElementById('adminUsersTableBody');
+  const countEl = document.getElementById('adminUsersCount');
+  if (!tbody) return;
+
+  adminUsersCache = users;
+
+  if (countEl) {
+    countEl.textContent = `${users.length} user terdaftar`;
+  }
+
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada user terdaftar.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = clients.map((client) => {
-    const badge = adminClientStatusBadge(client.status);
-    const label = adminClientStatusLabel(client.status);
-    const apps = (client.applications || []).map((app) => formatAdminClientAppLabel(app)).join(', ') || '—';
-    return `<tr data-client-id="${client.id}">
-      <td class="td-bold">${escapeHtml(client.company_name || '—')}</td>
-      <td>${escapeHtml(client.name || '—')}</td>
-      <td>${escapeHtml(client.email || '—')}${client.email_verified ? ' <span class="badge badge-active" style="font-size:10px;padding:2px 6px;margin-left:4px;">Verified</span>' : ''}</td>
-      <td>${escapeHtml(apps)}</td>
-      <td>${escapeHtml(client.whatsapp || '—')}</td>
-      <td><span class="badge ${badge}">${escapeHtml(label)}</span></td>
-      <td>${escapeHtml(client.created_at || '—')}</td>
-      <td>
-        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;margin-right:4px;" onclick="openAdminClientModal(${client.id})">Edit</button>
-        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;color:var(--rose);" onclick="deleteAdminClient(${client.id})">Hapus</button>
-      </td>
+  tbody.innerHTML = users.map((user) => {
+    const roleBadge = adminUserRoleBadge(user.role);
+    const clientStatus = user.status
+      ? `<span class="badge ${adminClientStatusBadge(user.status)}">${escapeHtml(adminClientStatusLabel(user.status))}</span>`
+      : '—';
+    const appsCell = adminUserApplicationsCell(user);
+    const appNamesAttr = (user.applications || []).length
+      ? ` data-application-names="${encodeURIComponent(JSON.stringify(user.applications))}"`
+      : '';
+    const editNoClientBtn = !user.client_id && (user.role === 'admin' || user.role === 'super_admin')
+      ? `<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;margin-right:4px;" onclick="openAdminUserEditModal(${user.user_id})">Edit</button>`
+      : '';
+    const clientActions = user.client_id
+      ? `<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="openAdminClientModal(${user.client_id})">Edit</button>`
+      : `${editNoClientBtn}<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;color:var(--rose);margin-right:4px;" onclick="deleteAdminUser(${user.user_id})">Hapus Akun</button>`;
+    const affiliateCell = adminAffiliateStatusCell(user);
+    return `<tr data-user-id="${user.user_id}" data-client-id="${user.client_id || ''}"${appNamesAttr}>
+      <td class="td-bold">${escapeHtml(user.name || '—')}</td>
+      <td>${escapeHtml(user.email || '—')}${user.email_verified ? ' <span class="badge badge-active" style="font-size:10px;padding:2px 6px;margin-left:4px;">Verified</span>' : ''}</td>
+      <td><span class="badge ${roleBadge}">${escapeHtml(user.role_label || user.role)}</span></td>
+      <td>${appsCell}</td>
+      <td>${escapeHtml(user.whatsapp || '—')}</td>
+      <td>${clientStatus}</td>
+      <td>${affiliateCell}</td>
+      <td>${escapeHtml(user.created_at || '—')}</td>
+      <td class="admin-users-actions-cell">${clientActions}</td>
     </tr>`;
   }).join('');
 }
@@ -987,12 +2215,34 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-async function refreshAdminClientsTable() {
-  const tbody = document.getElementById('adminClientsTableBody');
-  if (!tbody) return;
-
+async function refreshAdminClientsCache() {
   try {
     const response = await fetch(adminClientsUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    if (response.ok) {
+      adminClientsCache = data.clients || [];
+    }
+  } catch {
+    // ignore
+  }
+}
+
+async function refreshAdminUsersTable(options = {}) {
+  const { force = false, cacheOnly = false } = options;
+  const tbody = document.getElementById('adminUsersTableBody');
+  if (!tbody) return;
+
+  const hasServerRows = !!tbody.querySelector('tr[data-user-id]');
+  if (!force && hasServerRows && !cacheOnly) {
+    await refreshAdminUsersTable({ cacheOnly: true });
+    return;
+  }
+
+  try {
+    const response = await fetch(adminUsersUrl, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     });
@@ -1002,9 +2252,334 @@ async function refreshAdminClientsTable() {
       return;
     }
 
-    renderAdminClientsRows(data.clients || []);
+    adminUsersCache = data.users || [];
+    if (cacheOnly) {
+      await refreshAdminClientsCache();
+      return;
+    }
+
+    renderAdminUsersRows(adminUsersCache);
+    await refreshAdminClientsCache();
   } catch {
     // Biarkan data server-side jika request gagal.
+  }
+}
+
+async function deleteAdminUser(userId) {
+  const confirmed = await openAppDialog({
+    type: 'confirm',
+    title: 'Hapus User',
+    message: 'User dan data affiliate terkait akan dihapus permanen. Lanjutkan?',
+    okText: 'Hapus',
+    danger: true,
+  });
+  if (!confirmed) return;
+
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  try {
+    const response = await fetch(`${adminUsersDestroyUrl}/${userId}`, {
+      method: 'DELETE',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      await showAppAlert(data.message || Object.values(data.errors || {}).flat()[0] || 'Gagal menghapus user.');
+      return;
+    }
+
+    await refreshAdminUsersTable({ force: true });
+  } catch {
+    await showAppAlert('Terjadi kesalahan jaringan.');
+  }
+}
+
+async function saveAdminUserAffiliate(userId) {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const enabled = !!document.getElementById('adminClientAffiliateEnabled')?.checked;
+  const code = document.getElementById('adminClientAffiliateCode')?.value.trim();
+  const status = document.getElementById('adminClientAffiliateStatus')?.value || 'active';
+
+  const payload = { enabled, status };
+  if (code) payload.code = code;
+
+  const response = await fetch(`${adminUsersAffiliateUrl}/${userId}/affiliate`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-CSRF-TOKEN': csrf,
+    },
+    credentials: 'same-origin',
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const msg = data.message || Object.values(data.errors || {}).flat()[0] || 'Gagal menyimpan affiliate.';
+    throw new Error(msg);
+  }
+
+  return data;
+}
+
+function syncAdminClientRoleField(userId, isEdit) {
+  const group = document.getElementById('adminClientUserRoleGroup');
+  const select = document.getElementById('adminClientUserRole');
+  if (!group || !select) return;
+
+  const show = adminSession?.is_super_admin === true && isEdit && Boolean(userId);
+  group.hidden = !show;
+
+  if (!show) {
+    adminClientUserRoleOriginal = '';
+    return;
+  }
+
+  const user = adminUsersCache.find((item) => Number(item.user_id) === Number(userId));
+  const role = user?.role || 'client';
+  select.value = role;
+  adminClientUserRoleOriginal = role;
+}
+
+function setAdminClientModalLayout(mode) {
+  adminClientModalMode = mode;
+  const modal = document.getElementById('adminClientModal');
+  if (!modal) return;
+
+  const isUserOnly = mode === 'user';
+  modal.classList.toggle('is-user-only-edit', isUserOnly);
+
+  const waGroup = document.getElementById('adminClientWhatsapp')?.closest('.form-group');
+  const passwordGroup = document.getElementById('adminClientPassword')?.closest('.form-group');
+  const verifyRow = document.querySelector('.admin-client-email-row');
+  const nameInput = document.getElementById('adminClientName');
+  const emailInput = document.getElementById('adminClientEmail');
+
+  if (waGroup) waGroup.hidden = isUserOnly;
+  if (passwordGroup) passwordGroup.hidden = isUserOnly;
+  const verifyLabel = verifyRow?.querySelector('label');
+  if (verifyLabel) verifyLabel.hidden = isUserOnly;
+
+  if (nameInput) {
+    if (isUserOnly) nameInput.setAttribute('readonly', 'readonly');
+    else nameInput.removeAttribute('readonly');
+  }
+  if (emailInput) {
+    if (isUserOnly) emailInput.setAttribute('readonly', 'readonly');
+    else emailInput.removeAttribute('readonly');
+  }
+
+  const side = modal.querySelector('.admin-app-side');
+  if (side) side.hidden = isUserOnly;
+
+  modal.querySelectorAll('.admin-app-nav-item[data-panel="applications"], .admin-app-nav-item[data-panel="affiliate"]').forEach((el) => {
+    el.hidden = isUserOnly;
+  });
+}
+
+function openAdminUserEditModal(userId) {
+  const user = adminUsersCache.find((item) => Number(item.user_id) === Number(userId));
+  if (!user) return;
+
+  const modal = document.getElementById('adminClientModal');
+  const form = document.getElementById('adminClientForm');
+  const title = document.getElementById('adminClientModalTitle');
+  const idInput = document.getElementById('adminClientId');
+  const userIdInput = document.getElementById('adminClientUserId');
+  if (!modal || !form) return;
+
+  clearAdminClientAlert();
+  form.reset();
+  setAdminClientModalLayout('user');
+  switchAdminClientPanel('general', modal.querySelector('.admin-app-nav-item[data-panel="general"]'));
+
+  title.textContent = 'Edit User';
+  if (idInput) idInput.value = '';
+  if (userIdInput) userIdInput.value = user.user_id;
+
+  document.getElementById('adminClientName').value = user.name || '';
+  document.getElementById('adminClientEmail').value = user.email || '';
+  document.getElementById('adminClientEmailVerified').checked = !!user.email_verified;
+
+  syncAdminClientRoleField(user.user_id, true);
+  syncAdminClientAccountZone(false);
+
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function fillAdminClientAffiliateFields(userId) {
+  const user = adminUsersCache.find((item) => Number(item.user_id) === Number(userId));
+  const enabledEl = document.getElementById('adminClientAffiliateEnabled');
+  const codeEl = document.getElementById('adminClientAffiliateCode');
+  const statusEl = document.getElementById('adminClientAffiliateStatus');
+  const hintEl = document.getElementById('adminClientAffiliateLinkHint');
+  if (!enabledEl) return;
+
+  const enabled = user?.affiliate_enabled === true;
+  enabledEl.checked = enabled;
+  if (codeEl) codeEl.value = user?.affiliate_code || '';
+  if (statusEl) statusEl.value = user?.affiliate_status || 'active';
+  if (hintEl) {
+    if (user?.affiliate_referral_url) {
+      hintEl.hidden = false;
+      hintEl.textContent = `Link: ${user.affiliate_referral_url}`;
+    } else {
+      hintEl.hidden = true;
+      hintEl.textContent = '';
+    }
+  }
+}
+
+async function patchAdminUserRole(userId, role) {
+  if (!adminSession?.is_super_admin) {
+    return { ok: false, message: 'Hanya super admin yang dapat mengubah role.' };
+  }
+
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  try {
+    const response = await fetch(`${adminUsersRoleUrl}/${userId}/role`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ role }),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      const msg = data.errors?.role?.[0] || data.message || 'Gagal mengubah role.';
+      return { ok: false, message: msg };
+    }
+
+    if (Number(data.user?.user_id) === Number(adminSession?.id)) {
+      adminSession = { ...adminSession, role: data.user.role, is_super_admin: data.user.role === 'super_admin' };
+    }
+
+    return { ok: true, data };
+  } catch {
+    return { ok: false, message: 'Gagal mengubah role.' };
+  }
+}
+
+function showAdminLoginGate(show) {
+  const gate = document.getElementById('adminLoginGate');
+  const shell = document.getElementById('adminDashboardShell');
+  if (gate) gate.hidden = !show;
+  if (shell) shell.hidden = show;
+}
+
+function showAdminLoginAlert(message, type = 'error') {
+  const alert = document.getElementById('adminLoginAlert');
+  if (!alert) return;
+  alert.style.display = 'block';
+  alert.textContent = message;
+  if (type === 'success') {
+    alert.style.background = 'rgba(16,185,129,0.12)';
+    alert.style.border = '1px solid rgba(16,185,129,0.25)';
+    alert.style.color = 'var(--green)';
+  } else {
+    alert.style.background = 'rgba(240,104,104,0.12)';
+    alert.style.border = '1px solid rgba(240,104,104,0.25)';
+    alert.style.color = 'var(--rose)';
+  }
+}
+
+function clearAdminLoginAlert() {
+  const alert = document.getElementById('adminLoginAlert');
+  if (alert) {
+    alert.style.display = 'none';
+    alert.textContent = '';
+  }
+}
+
+async function restoreAdminSession() {
+  try {
+    const response = await fetch(adminMeUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+
+    if (data.logged_in && data.admin) {
+      adminSession = {
+        id: data.admin.id,
+        name: data.admin.name,
+        email: data.admin.email,
+        role: data.admin.role,
+        is_super_admin: data.admin.is_super_admin,
+      };
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  adminSession = null;
+  return false;
+}
+
+async function submitAdminLogin(event) {
+  event.preventDefault();
+  clearAdminLoginAlert();
+
+  const btn = document.getElementById('adminLoginBtn');
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const payload = {
+    email: document.getElementById('adminLoginEmail')?.value.trim(),
+    password: document.getElementById('adminLoginPassword')?.value,
+  };
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Memproses...';
+  }
+
+  try {
+    const response = await fetch(loginAdminUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      showAdminLoginAlert(data.message || 'Login gagal.');
+      return;
+    }
+
+    adminSession = {
+      id: data.admin.id,
+      name: data.admin.name,
+      email: data.admin.email,
+      role: data.admin.role,
+      is_super_admin: data.admin.is_super_admin,
+    };
+
+    showAdminLoginGate(false);
+    applyDashboardRoute('admin', resolveDashboardPage('admin'));
+  } catch {
+    showAdminLoginAlert('Terjadi kesalahan jaringan.');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Masuk Admin';
+    }
   }
 }
 
@@ -1062,9 +2637,16 @@ function renderAdminAffiliatesRows(affiliates) {
   }).join('');
 }
 
-async function refreshAdminAffiliatesTable() {
+async function refreshAdminAffiliatesTable(options = {}) {
+  const { force = false, cacheOnly = false } = options;
   const tbody = document.getElementById('adminAffiliatesTableBody');
   if (!tbody) return;
+
+  const hasServerRows = !!tbody.querySelector('tr[data-affiliate-id]');
+  if (!force && hasServerRows && !cacheOnly) {
+    await refreshAdminAffiliatesTable({ cacheOnly: true });
+    return;
+  }
 
   try {
     const response = await fetch(adminAffiliatesUrl, {
@@ -1077,7 +2659,12 @@ async function refreshAdminAffiliatesTable() {
       return;
     }
 
-    renderAdminAffiliatesRows(data.affiliates || []);
+    adminAffiliatesCache = data.affiliates || [];
+    if (cacheOnly) {
+      return;
+    }
+
+    renderAdminAffiliatesRows(adminAffiliatesCache);
   } catch {
     // Biarkan data server-side jika request gagal.
   }
@@ -1180,7 +2767,7 @@ async function payAdminCommission(orderId) {
     }
 
     await refreshAdminCommissionsTable();
-    await refreshAdminAffiliatesTable();
+    await refreshAdminAffiliatesTable({ force: true });
   } catch {
     await openAppDialog({
       type: 'alert',
@@ -1245,7 +2832,7 @@ async function openAdminAffiliateModal(affiliateId = null) {
   if (!modal || !form) return;
 
   if (affiliateId && !getAdminAffiliateFromCache(affiliateId)) {
-    await refreshAdminAffiliatesTable();
+    await refreshAdminAffiliatesTable({ force: true });
   }
 
   clearAdminAffiliateAlert();
@@ -1355,7 +2942,7 @@ async function submitAdminAffiliateForm(event) {
     }
 
     showAdminAffiliateAlert(data.message || 'Affiliate berhasil disimpan.', 'success');
-    await refreshAdminAffiliatesTable();
+    await refreshAdminAffiliatesTable({ force: true });
     setTimeout(() => closeAdminAffiliateModal(), 500);
   } catch {
     showAdminAffiliateAlert('Terjadi kesalahan jaringan. Silakan coba lagi.');
@@ -1371,7 +2958,7 @@ async function openAdminAffiliateTransactionsModal(affiliateId) {
   if (!modal || !tbody) return;
 
   if (!getAdminAffiliateFromCache(affiliateId)) {
-    await refreshAdminAffiliatesTable();
+    await refreshAdminAffiliatesTable({ force: true });
   }
 
   const affiliate = getAdminAffiliateFromDom(affiliateId);
@@ -1492,7 +3079,7 @@ async function deleteAdminAffiliate(affiliateId) {
       return;
     }
 
-    await refreshAdminAffiliatesTable();
+    await refreshAdminAffiliatesTable({ force: true });
   } catch {
     await showAppAlert('Terjadi kesalahan jaringan. Silakan coba lagi.');
   }
@@ -1587,8 +3174,12 @@ function renderAdminApplicationsRows(applications) {
         </button>`
       : '<span style="color:var(--text-3);">—</span>';
 
+    const logoThumb = app.logo_url
+      ? `<img class="admin-apps-table-logo" src="${escapeHtml(app.logo_url)}" alt="" width="28" height="28">`
+      : '<span class="admin-apps-table-logo admin-apps-table-logo--empty" aria-hidden="true"></span>';
+
     return `<tr class="admin-app-main-row" data-application-id="${app.id}">
-      <td class="td-bold">${escapeHtml(app.name || '—')}</td>
+      <td class="td-bold admin-apps-name-cell">${logoThumb}<span>${escapeHtml(app.name || '—')}</span></td>
       <td class="td-mono">${escapeHtml(app.slug || '—')}</td>
       <td>${pkgCell}</td>
       <td>${Number(app.clients_count ?? 0)}</td>
@@ -1650,17 +3241,24 @@ function renderAdminLicensesRows(licenses) {
   }
 
   if (!licenses.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada lisensi. Assign aplikasi ke client terlebih dahulu.</td></tr>';
+    const emptyMsg = adminLicensesSearchQuery || adminLicensesApplicationFilter
+      ? 'Tidak ada lisensi yang cocok dengan filter/pencarian.'
+      : 'Belum ada lisensi. Assign aplikasi ke client terlebih dahulu.';
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">${emptyMsg}</td></tr>`;
     return;
   }
 
   tbody.innerHTML = licenses.map((license) => {
     const badge = adminLicenseStatusBadge(license.status);
     const label = license.status ? license.status.charAt(0).toUpperCase() + license.status.slice(1) : '—';
-    const canRevoke = license.status === 'active' && !license.is_expired;
-    const revokeBtn = canRevoke
-      ? `<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;color:var(--rose);margin-left:4px;" onclick="revokeAdminLicense(${license.id})">Revoke</button>`
-      : '';
+    const statusKey = (license.status || '').toLowerCase();
+    const isExpiredLicense = !!license.is_expired || statusKey === 'expired';
+    const isActiveLicense = !isExpiredLicense && (statusKey === 'active' || statusKey === 'trial');
+    const devicesActive = Number(license.devices_active ?? 0);
+    const renewBtn = `<button type="button" class="btn btn-secondary admin-license-action-btn" onclick="renewAdminLicense(${license.id})"${isExpiredLicense ? '' : ' disabled'}>Renew</button>`;
+    const revokeBtn = `<button type="button" class="btn btn-secondary admin-license-action-btn admin-license-revoke-btn" onclick="revokeAdminLicense(${license.id})"${isActiveLicense ? '' : ' disabled'}>Revoke</button>`;
+    const releaseBtn = `<button type="button" class="btn btn-secondary admin-license-action-btn" onclick="releaseAdminLicenseDevices(${license.id})"${devicesActive > 0 ? '' : ' disabled'} title="${devicesActive > 0 ? `${devicesActive} perangkat terdaftar` : 'Tidak ada perangkat'}">Lepas perangkat</button>`;
+    const actionCell = `<div class="admin-license-actions">${renewBtn}${revokeBtn}${releaseBtn}</div>`;
 
     return `<tr data-license-id="${license.id}">
       <td class="td-mono">${escapeHtml(license.license_key || '—')}</td>
@@ -1669,20 +3267,69 @@ function renderAdminLicensesRows(licenses) {
       <td>${escapeHtml(license.package_name || '—')}${license.devices_max ? ` <span style="color:var(--text-3);font-size:11px;">(${Number(license.devices_max)} pc)</span>` : ''}</td>
       <td><span class="badge ${badge}">${escapeHtml(label)}</span></td>
       <td>${escapeHtml(license.expires_at || '—')}</td>
-      <td>
-        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="renewAdminLicense(${license.id})">Renew</button>
-        ${revokeBtn}
-      </td>
+      <td>${actionCell}</td>
     </tr>`;
   }).join('');
+}
+
+async function populateAdminLicenseApplicationFilter() {
+  const select = document.getElementById('adminLicenseApplicationFilter');
+  if (!select) return;
+
+  if (!adminApplicationsCache.length) {
+    await refreshAdminApplicationsTable(true);
+  }
+
+  const current = adminLicensesApplicationFilter || select.value || '';
+  select.innerHTML = '<option value="">Semua aplikasi</option>'
+    + adminApplicationsCache
+      .filter((app) => app.is_active !== false)
+      .map((app) => `<option value="${app.id}">${escapeHtml(app.name)}</option>`)
+      .join('');
+  select.value = current;
+  adminLicensesApplicationFilter = current;
+}
+
+function onAdminLicenseApplicationFilterChange() {
+  adminLicensesApplicationFilter = document.getElementById('adminLicenseApplicationFilter')?.value || '';
+  refreshAdminLicensesTable();
+}
+
+function bindAdminLicenseSearchInput() {
+  const input = document.getElementById('adminLicenseSearch');
+  if (!input || input.dataset.bound === '1') return;
+  input.dataset.bound = '1';
+  input.value = adminLicensesSearchQuery;
+
+  input.addEventListener('input', () => {
+    clearTimeout(adminLicensesSearchTimer);
+    adminLicensesSearchTimer = setTimeout(() => {
+      adminLicensesSearchQuery = input.value.trim();
+      refreshAdminLicensesTable();
+    }, 300);
+  });
+}
+
+function buildAdminLicensesApiUrl() {
+  const params = new URLSearchParams();
+  if (adminLicensesApplicationFilter) {
+    params.set('application_id', adminLicensesApplicationFilter);
+  }
+  if (adminLicensesSearchQuery) {
+    params.set('q', adminLicensesSearchQuery);
+  }
+  const qs = params.toString();
+  return qs ? `${adminLicensesUrl}?${qs}` : adminLicensesUrl;
 }
 
 async function refreshAdminLicensesTable() {
   const tbody = document.getElementById('adminLicensesTableBody');
   if (!tbody) return;
 
+  bindAdminLicenseSearchInput();
+
   try {
-    const response = await fetch(adminLicensesUrl, {
+    const response = await fetch(buildAdminLicensesApiUrl(), {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     });
@@ -1706,7 +3353,7 @@ async function renewAdminLicense(licenseId) {
   const confirmed = await openAppDialog({
     type: 'confirm',
     title: 'Perpanjang Lisensi',
-    message: `Perpanjang lisensi ${licenseKey}? Masa berlaku akan dihitung ulang dari paket saat ini.`,
+    message: `Aktifkan kembali lisensi expired ${licenseKey}? Masa berlaku dihitung ulang dari paket saat ini (tanpa pembayaran client).`,
     okText: 'Renew',
   });
   if (!confirmed) return;
@@ -1742,8 +3389,8 @@ async function revokeAdminLicense(licenseId) {
 
   const confirmed = await openAppDialog({
     type: 'confirm',
-    title: 'Cabut Lisensi',
-    message: `Yakin ingin mencabut lisensi ${licenseKey}? Semua perangkat teraktivasi untuk aplikasi ini akan dinonaktifkan.`,
+    title: 'Revoke Lisensi',
+    message: `Yakin ingin revoke lisensi ${licenseKey}? Masa berlaku berakhir dan semua perangkat untuk aplikasi ini akan dihapus.`,
     okText: 'Revoke',
     danger: true,
   });
@@ -1768,7 +3415,49 @@ async function revokeAdminLicense(licenseId) {
     }
 
     await refreshAdminLicensesTable();
-    await showAppAlert(data.message || 'Lisensi berhasil dicabut.', 'success');
+    await showAppAlert(data.message || 'Lisensi berhasil di-revoke.', 'success');
+  } catch {
+    await showAppAlert('Terjadi kesalahan jaringan. Silakan coba lagi.');
+  }
+}
+
+async function releaseAdminLicenseDevices(licenseId) {
+  const license = adminLicensesCache.find((item) => item.id === licenseId);
+  const licenseKey = license?.license_key || `#${licenseId}`;
+  const count = Number(license?.devices_active ?? 0);
+
+  if (count <= 0) return;
+
+  const confirmed = await openAppDialog({
+    type: 'confirm',
+    title: 'Lepas perangkat',
+    message: `Lepas ${count} perangkat terdaftar untuk lisensi ${licenseKey}? Status lisensi tidak berubah; client perlu Activate lagi jika lisensi masih aktif.`,
+    okText: 'Lepas perangkat',
+    danger: true,
+  });
+  if (!confirmed) return;
+
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  try {
+    const response = await fetch(`${adminLicensesUrl}/${licenseId}/release-devices`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      await showAppAlert(data.message || 'Gagal melepas perangkat.');
+      return;
+    }
+
+    await refreshAdminLicensesTable();
+    await refreshAdminApplicationsTable(true);
+    await showAppAlert(data.message || 'Perangkat berhasil dilepas.', 'success');
   } catch {
     await showAppAlert('Terjadi kesalahan jaringan. Silakan coba lagi.');
   }
@@ -2111,11 +3800,11 @@ function formatAdminPackageCommissionLabel(pkg = {}, saleAmount = null) {
 
   if (percent > 0) {
     const amount = Math.round(price * (percent / 100));
-    return `${formatAdminPackagePrice(percent)}% (Rp ${formatAdminPackagePrice(amount)})`;
+    return `${formatAdminPackageCommissionPercent(percent)}% (${formatAdminPackagePriceDisplay(amount)})`;
   }
 
   if (fixed > 0) {
-    return `Rp ${formatAdminPackagePrice(fixed)}`;
+    return formatAdminPackagePriceDisplay(fixed);
   }
 
   return '—';
@@ -2137,7 +3826,7 @@ function setAdminPackageCommissionFields(row, { fixed, percent }, source) {
   row.dataset.commissionUpdating = '1';
   const fixedEl = row.querySelector('.pkg-commission-fixed');
   const percentEl = row.querySelector('.pkg-commission-percent');
-  if (fixedEl && typeof fixed !== 'undefined') fixedEl.value = formatAdminPackagePrice(fixed);
+  if (fixedEl && typeof fixed !== 'undefined') fixedEl.value = formatAdminPackagePriceDisplay(fixed);
   if (percentEl && typeof percent !== 'undefined') percentEl.value = formatAdminPackageCommissionPercent(percent);
   if (source) row.dataset.commissionSource = source;
   delete row.dataset.commissionUpdating;
@@ -2145,7 +3834,7 @@ function setAdminPackageCommissionFields(row, { fixed, percent }, source) {
 
 function syncAdminPackageCommissionFromFixed(row) {
   const price = getAdminPackageRowPrice(row);
-  const fixed = Math.max(0, Number(row.querySelector('.pkg-commission-fixed')?.value || 0));
+  const fixed = Math.max(0, parseAdminPackagePriceInput(row.querySelector('.pkg-commission-fixed')?.value || 0));
   if (price <= 0) {
     setAdminPackageCommissionFields(row, { percent: 0 }, 'fixed');
     return;
@@ -2215,6 +3904,123 @@ function updateAdminApplicationPackagesEmptyState() {
   empty.hidden = body.children.length > 0;
 }
 
+let adminPackageFeaturesTargetRow = null;
+
+function inferAdminPackageFeatures(name) {
+  const n = String(name || '').trim().toLowerCase();
+  if (n.includes('trial')) return { parallel_max: 1, feature_uv: false };
+  if (/\bpro\b/.test(n)) return { parallel_max: 2, feature_uv: false };
+  if (n.includes('ultimate') || n.includes('platinum')) return { parallel_max: null, feature_uv: true };
+  return { parallel_max: null, feature_uv: true };
+}
+
+function readAdminPackageRowFeatures(row) {
+  const raw = row?.dataset?.parallelMax;
+  return {
+    parallel_max: raw === '' || raw === undefined ? null : Number(raw),
+    feature_uv: row?.dataset?.featureUv !== '0',
+  };
+}
+
+function writeAdminPackageRowFeatures(row, { parallel_max, feature_uv }) {
+  if (!row) return;
+  row.dataset.parallelMax = parallel_max == null || Number.isNaN(parallel_max) ? '' : String(parallel_max);
+  row.dataset.featureUv = feature_uv ? '1' : '0';
+}
+
+function initAdminPackageRowFeatures(row, pkg = {}) {
+  const hasStored =
+    Object.prototype.hasOwnProperty.call(pkg, 'parallel_max')
+    || Object.prototype.hasOwnProperty.call(pkg, 'feature_uv');
+  if (hasStored) {
+    writeAdminPackageRowFeatures(row, {
+      parallel_max: pkg.parallel_max ?? null,
+      feature_uv: pkg.feature_uv !== false,
+    });
+  } else {
+    writeAdminPackageRowFeatures(row, inferAdminPackageFeatures(pkg.name));
+  }
+}
+
+function bindAdminPackageFeaturesModalControls() {
+  const modal = document.getElementById('adminPackageFeaturesModal');
+  if (!modal || modal.dataset.bound === '1') return;
+  modal.dataset.bound = '1';
+
+  const maxInput = document.getElementById('adminPkgParallelMaxInput');
+  const limitedRadio = document.querySelector('input[name="adminPkgParallelMode"][value="limited"]');
+
+  maxInput?.addEventListener('focus', () => {
+    if (limitedRadio) limitedRadio.checked = true;
+  });
+
+  modal.querySelectorAll('input[name="adminPkgParallelMode"]').forEach((el) => {
+    el.addEventListener('change', () => syncAdminPackageFeaturesParallelInputState());
+  });
+}
+
+function syncAdminPackageFeaturesParallelInputState() {
+  const limited = document.querySelector('input[name="adminPkgParallelMode"][value="limited"]')?.checked;
+  const maxInput = document.getElementById('adminPkgParallelMaxInput');
+  if (maxInput) maxInput.disabled = !limited;
+}
+
+function openAdminPackageFeaturesModal(btn) {
+  bindAdminPackageFeaturesModalControls();
+  const row = btn?.closest('tr.admin-app-package-row');
+  if (!row) return;
+  adminPackageFeaturesTargetRow = row;
+  const modal = document.getElementById('adminPackageFeaturesModal');
+  const subtitle = document.getElementById('adminPackageFeaturesSubtitle');
+  const name = row.querySelector('.pkg-name')?.value?.trim() || 'Paket';
+  if (subtitle) subtitle.textContent = `Batas fitur untuk “${name}” di aplikasi desktop`;
+
+  const { parallel_max, feature_uv } = readAdminPackageRowFeatures(row);
+  const unlimited = document.querySelector('input[name="adminPkgParallelMode"][value="unlimited"]');
+  const limited = document.querySelector('input[name="adminPkgParallelMode"][value="limited"]');
+  const off = document.querySelector('input[name="adminPkgParallelMode"][value="off"]');
+  const maxInput = document.getElementById('adminPkgParallelMaxInput');
+  const uvEl = document.getElementById('adminPkgFeatureUv');
+
+  if (parallel_max === 1) off.checked = true;
+  else if (parallel_max != null && parallel_max > 1) {
+    limited.checked = true;
+    if (maxInput) maxInput.value = String(parallel_max);
+  } else if (unlimited) unlimited.checked = true;
+
+  if (uvEl) uvEl.checked = !!feature_uv;
+  syncAdminPackageFeaturesParallelInputState();
+  if (modal) modal.hidden = false;
+}
+
+function closeAdminPackageFeaturesModal() {
+  const modal = document.getElementById('adminPackageFeaturesModal');
+  if (modal) modal.hidden = true;
+  adminPackageFeaturesTargetRow = null;
+}
+
+function saveAdminPackageFeaturesModal() {
+  const row = adminPackageFeaturesTargetRow;
+  if (!row) {
+    closeAdminPackageFeaturesModal();
+    return;
+  }
+  const mode = document.querySelector('input[name="adminPkgParallelMode"]:checked')?.value || 'unlimited';
+  const maxInput = document.getElementById('adminPkgParallelMaxInput');
+  const uvEl = document.getElementById('adminPkgFeatureUv');
+  let parallel_max = null;
+  if (mode === 'off') parallel_max = 1;
+  else if (mode === 'limited') {
+    parallel_max = Math.max(2, Math.min(99, Number(maxInput?.value || 2)));
+    if (maxInput) maxInput.value = String(parallel_max);
+  }
+  writeAdminPackageRowFeatures(row, {
+    parallel_max,
+    feature_uv: !!uvEl?.checked,
+  });
+  closeAdminPackageFeaturesModal();
+}
+
 function addAdminApplicationPackageRow(pkg = {}) {
   const body = document.getElementById('adminApplicationPackagesBody');
   if (!body) return;
@@ -2236,12 +4042,19 @@ function addAdminApplicationPackageRow(pkg = {}) {
     </td>
     <td class="pkg-price-cell"><input class="admin-app-input pkg-price" type="text" inputmode="numeric" value="${formatAdminPackagePriceDisplay(pkg.price ?? 0)}" required></td>
     <td class="pkg-discount-cell"><input class="admin-app-input pkg-discount" type="number" min="0" max="100" step="0.01" value="${formatAdminPackageCommissionPercent(pkg.discount_percent ?? 0)}" placeholder="0"></td>
-    <td class="pkg-commission-fixed-cell"><input class="admin-app-input pkg-commission-fixed" type="number" min="0" step="1" value="${formatAdminPackagePrice(pkg.affiliate_commission_fixed ?? 0)}" placeholder="0"></td>
-    <td class="pkg-commission-percent-cell"><input class="admin-app-input pkg-commission-percent" type="number" min="0" max="100" step="0.01" value="${formatAdminPackagePrice(pkg.affiliate_commission_percent ?? 0)}" placeholder="0"></td>
-    <td class="col-pkg-actions-cell"><button type="button" class="admin-app-pkg-remove" title="Hapus paket" onclick="removeAdminApplicationPackageRow(this)">×</button></td>
+    <td class="pkg-commission-fixed-cell"><input class="admin-app-input pkg-commission-fixed" type="text" inputmode="numeric" value="${formatAdminPackagePriceDisplay(pkg.affiliate_commission_fixed ?? 0)}" placeholder="Rp 0"></td>
+    <td class="pkg-commission-percent-cell"><input class="admin-app-input pkg-commission-percent" type="number" min="0" max="100" step="0.01" value="${formatAdminPackageCommissionPercent(pkg.affiliate_commission_percent ?? 0)}" placeholder="0"></td>
+    <td class="col-pkg-actions-cell">
+      <div class="admin-app-pkg-actions">
+        <button type="button" class="admin-app-pkg-features" title="Fitur paket" onclick="openAdminPackageFeaturesModal(this)">Fitur</button>
+        <button type="button" class="admin-app-pkg-remove" title="Hapus paket" onclick="removeAdminApplicationPackageRow(this)">×</button>
+      </div>
+    </td>
   `;
   body.appendChild(row);
   bindAdminPackagePriceInput(row.querySelector('.pkg-price'));
+  bindAdminPackagePriceInput(row.querySelector('.pkg-commission-fixed'));
+  initAdminPackageRowFeatures(row, pkg);
   initializeAdminPackageCommissionRow(row, pkg);
   updateAdminApplicationPackagesEmptyState();
 }
@@ -2299,9 +4112,10 @@ function collectAdminApplicationPackages() {
         : Number(row.querySelector('.pkg-days')?.value || 1),
       price: parseAdminPackagePriceInput(row.querySelector('.pkg-price')?.value || 0),
       discount_percent: Number(row.querySelector('.pkg-discount')?.value || 0),
-      affiliate_commission_fixed: Number(row.querySelector('.pkg-commission-fixed')?.value || 0),
+      affiliate_commission_fixed: parseAdminPackagePriceInput(row.querySelector('.pkg-commission-fixed')?.value || 0),
       affiliate_commission_percent: Number(row.querySelector('.pkg-commission-percent')?.value || 0),
       sort_order: index,
+      ...readAdminPackageRowFeatures(row),
     });
   });
 
@@ -2348,6 +4162,65 @@ function switchAdminClientPanel(panel, btn) {
   });
 }
 
+function updateAdminApplicationLogoPreview(url) {
+  const preview = document.getElementById('adminApplicationLogoPreview');
+  const hidden = document.getElementById('adminApplicationLogoUrl');
+  const clearBtn = document.getElementById('adminApplicationLogoClearBtn');
+  if (!preview || !hidden) return;
+  hidden.value = url || '';
+  preview.innerHTML = url
+    ? `<img src="${escapeHtml(url)}" alt="Logo aplikasi">`
+    : '<span class="admin-app-logo-empty">Belum ada logo</span>';
+  if (clearBtn) clearBtn.hidden = !url;
+}
+
+function clearAdminApplicationLogo() {
+  updateAdminApplicationLogoPreview('');
+  const fileInput = document.getElementById('adminApplicationLogoFile');
+  if (fileInput) fileInput.value = '';
+}
+
+async function uploadAdminApplicationLogo(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+
+  const pick = input.closest('.admin-app-logo-pick');
+  const formData = new FormData();
+  formData.append('image', file);
+
+  if (pick) {
+    pick.style.pointerEvents = 'none';
+    pick.style.opacity = '0.7';
+  }
+
+  try {
+    const response = await fetch(adminApplicationLogoUploadUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '',
+      },
+      credentials: 'same-origin',
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const firstError = data.errors ? Object.values(data.errors).flat()[0] : null;
+      showAdminApplicationAlert(firstError || data.message || 'Gagal mengupload logo.');
+      return;
+    }
+    updateAdminApplicationLogoPreview(data.url || '');
+  } catch {
+    showAdminApplicationAlert('Gagal mengupload logo.');
+  } finally {
+    input.value = '';
+    if (pick) {
+      pick.style.pointerEvents = '';
+      pick.style.opacity = '';
+    }
+  }
+}
+
 function openAdminApplicationModal(applicationId = null) {
   const modal = document.getElementById('adminApplicationModal');
   const form = document.getElementById('adminApplicationForm');
@@ -2372,6 +4245,7 @@ function openAdminApplicationModal(applicationId = null) {
     document.getElementById('adminApplicationDevicesMax').value = app.default_devices_max ?? 3;
     document.getElementById('adminApplicationSortOrder').value = app.sort_order ?? 0;
     document.getElementById('adminApplicationIsActive').checked = !!app.is_active;
+    updateAdminApplicationLogoPreview(app.logo_url || '');
     renderAdminApplicationPackages(app.packages || []);
   } else {
     title.textContent = 'Tambah Aplikasi';
@@ -2379,6 +4253,7 @@ function openAdminApplicationModal(applicationId = null) {
     document.getElementById('adminApplicationDevicesMax').value = 3;
     document.getElementById('adminApplicationSortOrder').value = 0;
     document.getElementById('adminApplicationIsActive').checked = true;
+    updateAdminApplicationLogoPreview('');
     renderAdminApplicationPackages([]);
   }
 
@@ -2406,6 +4281,7 @@ async function submitAdminApplicationForm(event) {
     name: document.getElementById('adminApplicationName')?.value.trim(),
     slug: document.getElementById('adminApplicationSlug')?.value.trim(),
     description: document.getElementById('adminApplicationDescription')?.value.trim(),
+    logo_url: document.getElementById('adminApplicationLogoUrl')?.value.trim() || null,
     default_devices_max: Number(document.getElementById('adminApplicationDevicesMax')?.value || 3),
     sort_order: Number(document.getElementById('adminApplicationSortOrder')?.value || 0),
     is_active: document.getElementById('adminApplicationIsActive')?.checked ?? true,
@@ -2506,16 +4382,15 @@ function clearAdminClientAlert() {
 }
 
 function getAdminClientFromDom(clientId) {
-  const row = document.querySelector(`#adminClientsTableBody tr[data-client-id="${clientId}"]`);
+  const row = document.querySelector(`#adminUsersTableBody tr[data-client-id="${clientId}"]`);
   if (!row || !row.cells?.length) return null;
 
   return {
     id: Number(clientId),
-    company_name: row.cells[0].textContent.trim(),
-    name: row.cells[1].textContent.trim(),
-    email: row.cells[2].textContent.trim(),
+    name: row.cells[0].textContent.trim(),
+    email: row.cells[1].textContent.trim().replace(/\s*Verified\s*$/, '').trim(),
     whatsapp: row.cells[4].textContent.trim(),
-    status: row.querySelector('.badge')?.textContent.trim().toLowerCase() || 'active',
+    status: row.cells[5].querySelector('.badge')?.textContent.trim().toLowerCase() || 'active',
   };
 }
 
@@ -2552,7 +4427,11 @@ function getSelectedAdminClientApplications() {
     const check = card.querySelector('.admin-client-app-check');
     if (!check?.checked) return;
     const applicationId = Number(check.value);
-    const pkgInput = card.querySelector('.admin-client-pkg-option input[type="radio"]:checked');
+    let pkgInput = card.querySelector('.admin-client-pkg-option input[type="radio"]:checked');
+    if (!pkgInput) {
+      pkgInput = card.querySelector('.admin-client-pkg-option input[type="radio"]');
+      if (pkgInput) pkgInput.checked = true;
+    }
     const packageId = Number(pkgInput?.value);
     if (applicationId > 0 && packageId > 0) {
       items.push({ application_id: applicationId, package_id: packageId });
@@ -2563,18 +4442,13 @@ function getSelectedAdminClientApplications() {
 
 function validateAdminClientForm(isEdit) {
   const name = document.getElementById('adminClientName')?.value.trim();
-  const company = document.getElementById('adminClientCompany')?.value.trim();
   const email = document.getElementById('adminClientEmail')?.value.trim();
   const whatsapp = document.getElementById('adminClientWhatsapp')?.value.trim();
   const password = document.getElementById('adminClientPassword')?.value;
-  const status = document.getElementById('adminClientStatus')?.value;
   const modal = document.getElementById('adminClientModal');
 
   if (!name) {
-    return { valid: false, panel: 'general', message: 'Nama lengkap wajib diisi.' };
-  }
-  if (!company) {
-    return { valid: false, panel: 'general', message: 'Nama perusahaan wajib diisi.' };
+    return { valid: false, panel: 'general', message: 'Nama akun wajib diisi.' };
   }
   if (!email) {
     return { valid: false, panel: 'general', message: 'Email wajib diisi.' };
@@ -2594,10 +4468,6 @@ function validateAdminClientForm(isEdit) {
   if (isEdit && password && password.length < 8) {
     return { valid: false, panel: 'general', message: 'Password minimal 8 karakter jika diubah.' };
   }
-  if (!status) {
-    return { valid: false, panel: 'applications', message: 'Status wajib dipilih.' };
-  }
-
   const checkedApps = document.querySelectorAll('.admin-client-app-check:checked').length;
   const assignments = getSelectedAdminClientApplications();
   if (checkedApps > 0 && assignments.length !== checkedApps) {
@@ -2613,6 +4483,45 @@ function validateAdminClientForm(isEdit) {
   }
 
   return { valid: true };
+}
+
+function syncAdminClientAccountZone(isEdit, status = 'active') {
+  const zone = document.getElementById('adminClientAccountZone');
+  const statusInput = document.getElementById('adminClientStatus');
+  if (!zone || !statusInput) return;
+
+  zone.hidden = !isEdit || adminClientModalMode === 'user';
+  if (!isEdit || adminClientModalMode === 'user') {
+    statusInput.value = 'active';
+    return;
+  }
+
+  const normalized = status === 'inactive' ? 'inactive' : 'active';
+  statusInput.value = normalized;
+
+  const badge = document.getElementById('adminClientStatusBadge');
+  const toggleBtn = document.getElementById('adminClientToggleStatusBtn');
+  if (badge) {
+    badge.textContent = adminClientStatusLabel(normalized);
+    badge.className = `badge ${adminClientStatusBadge(normalized)}`;
+  }
+  if (toggleBtn) {
+    toggleBtn.textContent = normalized === 'active' ? 'Nonaktifkan akun' : 'Aktifkan akun';
+  }
+}
+
+function toggleAdminClientAccountStatus() {
+  const statusInput = document.getElementById('adminClientStatus');
+  if (!statusInput) return;
+  const next = statusInput.value === 'inactive' ? 'active' : 'inactive';
+  syncAdminClientAccountZone(true, next);
+}
+
+async function deleteAdminClientFromModal() {
+  const clientId = document.getElementById('adminClientId')?.value;
+  if (!clientId) return;
+  await deleteAdminClient(clientId);
+  closeAdminClientModal();
 }
 
 function focusAdminClientPanel(panel) {
@@ -2655,8 +4564,10 @@ async function renderAdminClientApplicationOptions(selectedApps = []) {
       </div>`;
     }
 
-    // Jangan fallback ke paket pertama (biasanya trial) jika package_id belum tersimpan.
-    const defaultPackageId = selectedPackageId > 0 ? selectedPackageId : 0;
+    // Jika client sudah punya aplikasi tapi package_id hilang/tidak valid, pilih paket pertama agar simpan tidak gagal.
+    const defaultPackageId = selectedPackageId > 0
+      ? selectedPackageId
+      : (isChecked && packages.length ? Number(packages[0].id) : 0);
     const packageOptions = packages.map((pkg) => {
       const checked = defaultPackageId > 0 && Number(pkg.id) === defaultPackageId ? 'checked' : '';
       return `<label class="admin-client-pkg-option">
@@ -2684,7 +4595,7 @@ async function renderAdminClientApplicationOptions(selectedApps = []) {
   }).join('');
 }
 
-function openAdminClientModal(clientId = null) {
+async function openAdminClientModal(clientId = null) {
   const modal = document.getElementById('adminClientModal');
   const form = document.getElementById('adminClientForm');
   const title = document.getElementById('adminClientModalTitle');
@@ -2695,12 +4606,18 @@ function openAdminClientModal(clientId = null) {
 
   clearAdminClientAlert();
   form.reset();
+  setAdminClientModalLayout('client');
   modal.querySelectorAll('.admin-app-nav-item.has-error').forEach((el) => el.classList.remove('has-error'));
   switchAdminClientPanel('general', modal.querySelector('.admin-app-nav-item[data-panel="general"]'));
 
   let client = clientId
     ? adminClientsCache.find((item) => Number(item.id) === Number(clientId))
     : null;
+
+  if (clientId && (!client || !client.applications?.length)) {
+    await refreshAdminClientsCache();
+    client = adminClientsCache.find((item) => Number(item.id) === Number(clientId)) || client;
+  }
 
   if (clientId && !client) {
     client = getAdminClientFromDom(clientId);
@@ -2709,23 +4626,31 @@ function openAdminClientModal(clientId = null) {
   if (client) {
     title.textContent = 'Edit Client';
     idInput.value = client.id;
+    const userIdInput = document.getElementById('adminClientUserId');
+    if (userIdInput) userIdInput.value = client.user_id || '';
     document.getElementById('adminClientName').value = client.name || '';
-    document.getElementById('adminClientCompany').value = client.company_name || '';
     document.getElementById('adminClientEmail').value = client.email || '';
     document.getElementById('adminClientEmailVerified').checked = !!client.email_verified;
     document.getElementById('adminClientWhatsapp').value = client.whatsapp || '';
-    document.getElementById('adminClientStatus').value = client.status || 'active';
+    syncAdminClientAccountZone(true, client.status || 'active');
     passwordInput.required = false;
     passwordHint.textContent = '(kosongkan jika tidak diubah)';
-    renderAdminClientApplicationOptions(client.applications || []);
+    await renderAdminClientApplicationOptions(client.applications || []);
+    fillAdminClientAffiliateFields(client.user_id);
+    syncAdminClientRoleField(client.user_id, true);
   } else {
     title.textContent = 'Tambah Client';
     idInput.value = '';
-    document.getElementById('adminClientStatus').value = 'active';
+    const userIdInput = document.getElementById('adminClientUserId');
+    if (userIdInput) userIdInput.value = '';
+    syncAdminClientRoleField(null, false);
+    const enabledEl = document.getElementById('adminClientAffiliateEnabled');
+    if (enabledEl) enabledEl.checked = false;
+    syncAdminClientAccountZone(false);
     document.getElementById('adminClientEmailVerified').checked = false;
     passwordInput.required = true;
     passwordHint.textContent = '(wajib)';
-    renderAdminClientApplicationOptions([]);
+    await renderAdminClientApplicationOptions([]);
   }
 
   modal.classList.add('open');
@@ -2736,6 +4661,7 @@ function closeAdminClientModal() {
   const modal = document.getElementById('adminClientModal');
   if (!modal) return;
   modal.classList.remove('open');
+  setAdminClientModalLayout('client');
   document.body.style.overflow = '';
   clearAdminClientAlert();
   switchAdminClientPanel('general', modal.querySelector('.admin-app-nav-item[data-panel="general"]'));
@@ -2746,8 +4672,38 @@ async function submitAdminClientForm(event) {
   clearAdminClientAlert();
 
   const btn = document.getElementById('adminClientSubmitBtn');
-  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
   const clientId = document.getElementById('adminClientId')?.value;
+  const userIdOnly = document.getElementById('adminClientUserId')?.value;
+
+  if (adminClientModalMode === 'user' && userIdOnly) {
+    const role = document.getElementById('adminClientUserRole')?.value;
+    if (role && role !== adminClientUserRoleOriginal) {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Menyimpan...';
+      }
+      const result = await patchAdminUserRole(userIdOnly, role);
+      if (!result.ok) {
+        showAdminClientAlert(result.message || 'Gagal mengubah role.');
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Simpan';
+        }
+        return;
+      }
+      showAdminClientAlert('Role berhasil diperbarui.', 'success');
+      await refreshAdminUsersTable({ force: true });
+      setTimeout(() => closeAdminClientModal(), 400);
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Simpan';
+      }
+    } else {
+      closeAdminClientModal();
+    }
+    return;
+  }
+
   const isEdit = Boolean(clientId);
   const validation = validateAdminClientForm(isEdit);
 
@@ -2758,9 +4714,10 @@ async function submitAdminClientForm(event) {
     return;
   }
 
+  const clientName = document.getElementById('adminClientName')?.value.trim();
   const payload = {
-    name: document.getElementById('adminClientName')?.value.trim(),
-    company_name: document.getElementById('adminClientCompany')?.value.trim(),
+    name: clientName,
+    company_name: clientName,
     email: document.getElementById('adminClientEmail')?.value.trim(),
     email_verified: !!document.getElementById('adminClientEmailVerified')?.checked,
     whatsapp: document.getElementById('adminClientWhatsapp')?.value.trim(),
@@ -2803,8 +4760,35 @@ async function submitAdminClientForm(event) {
       return;
     }
 
+    const resolvedClientId = clientId || data.client?.id;
+    const userId = document.getElementById('adminClientUserId')?.value
+      || data.client?.user_id
+      || adminUsersCache.find((u) => Number(u.client_id) === Number(resolvedClientId))?.user_id;
+
+    const affiliateTouched = document.getElementById('adminClientAffiliateEnabled');
+    if (userId && affiliateTouched) {
+      try {
+        await saveAdminUserAffiliate(userId);
+      } catch (affiliateError) {
+        showAdminClientAlert(affiliateError.message || 'Client tersimpan, tetapi affiliate gagal diperbarui.');
+        await refreshAdminUsersTable({ force: true });
+        return;
+      }
+    }
+
+    const roleSelect = document.getElementById('adminClientUserRole');
+    const newRole = roleSelect?.value;
+    if (userId && newRole && newRole !== adminClientUserRoleOriginal) {
+      const roleResult = await patchAdminUserRole(userId, newRole);
+      if (!roleResult.ok) {
+        showAdminClientAlert(roleResult.message || 'Client tersimpan, tetapi role gagal diperbarui.');
+        await refreshAdminUsersTable({ force: true });
+        return;
+      }
+    }
+
     showAdminClientAlert(data.message, 'success');
-    await refreshAdminClientsTable();
+    await refreshAdminUsersTable({ force: true });
 
     setTimeout(() => {
       closeAdminClientModal();
@@ -2847,7 +4831,7 @@ async function deleteAdminClient(clientId) {
       return;
     }
 
-    await refreshAdminClientsTable();
+    await refreshAdminUsersTable({ force: true });
   } catch {
     await showAppAlert('Terjadi kesalahan jaringan. Silakan coba lagi.');
   }
@@ -3726,7 +5710,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('appLanding')) {
     renderPricing();
 
-    setTimeout(revealOnScroll, 100);
+    revealOnScroll();
 
     window.addEventListener('scroll', () => {
       updateNav();
@@ -3737,10 +5721,20 @@ document.addEventListener('DOMContentLoaded', () => {
   initAppState();
 });
 
+let clientLicenseTabHiddenAt = 0;
+
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible') return;
-  const licensePage = document.getElementById('client-license');
-  if (licensePage?.classList.contains('active')) {
-    loadClientLicense();
+  if (document.visibilityState === 'hidden') {
+    clientLicenseTabHiddenAt = Date.now();
+    return;
   }
+  if (document.visibilityState !== 'visible') return;
+
+  const licensePage = document.getElementById('client-license');
+  if (!licensePage?.classList.contains('active')) return;
+
+  const hiddenMs = clientLicenseTabHiddenAt ? Date.now() - clientLicenseTabHiddenAt : 0;
+  if (hiddenMs < 20000) return;
+
+  loadClientLicense({ background: true });
 });

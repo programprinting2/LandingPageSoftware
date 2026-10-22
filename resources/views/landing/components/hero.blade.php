@@ -1,4 +1,4 @@
-﻿<section class="hero" id="hero">
+<section class="hero" id="hero">
   <div class="hero-bg-decor" aria-hidden="true">
     <div class="hero-memphis-blob hero-memphis-blob--navy"></div>
 
@@ -44,13 +44,22 @@
       <span class="text-accent">{{ $cms['hero']['title_highlight_2'] ?? '1x klik' }}</span>.
     </h1>
     <div class="hero-visual reveal reveal-delay-1">
-      <img src="{{ asset('images/quick spot color hero.png') }}" alt="Quick Spot Color — Software DTF Printing">
+      <img
+        class="hero-visual-img hero-visual-img--desktop"
+        src="{{ asset('images/quick spot color hero.png') }}"
+        alt="Quick Spot Color — Software DTF Printing"
+      >
+      <img
+        class="hero-visual-img hero-visual-img--mobile"
+        src="{{ asset('images/mobile quick spot color hero.png') }}"
+        alt="Quick Spot Color — Software DTF Printing"
+      >
     </div>
     <p class="hero-sub reveal reveal-delay-2">
       {{ $cms['hero']['subtitle'] ?? 'Tinggalkan proses bikin spot color & white mask manual.' }}
     </p>
     <div class="hero-actions reveal reveal-delay-3">
-      <button class="btn btn-primary btn-lg" onclick="openModal('register')">
+      <button type="button" class="btn btn-primary btn-lg" onclick="handleLandingHeroCta()">
         {{ $cms['hero']['cta_primary'] ?? 'Coba Gratis' }}
       </button>
       @if(!empty($cms['hero']['cta_secondary']))

@@ -5,6 +5,9 @@
 @endpush
 
 @section('content')
-    @include('admin.index')
+    @include('shared.components.admin-login-gate')
+    <div id="adminDashboardShell" hidden>
+        @include('admin.index')
+    </div>
     @include('shared.components.app-dialog')
 @endsection

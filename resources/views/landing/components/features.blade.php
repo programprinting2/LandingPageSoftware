@@ -1,4 +1,4 @@
-﻿<section class="features-split-section" id="fitur">
+<section class="features-split-section" id="fitur">
   <div class="features-split-header">
     <h2>{{ $cms['features']['title'] ?? 'Dirancang untuk Produktivitas Cetak' }}</h2>
   </div>

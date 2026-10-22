@@ -6,5 +6,6 @@
 
 @section('content')
     @include('client.index')
+    @include('shared.components.checkout-modal')
     @include('shared.components.app-dialog')
 @endsection
