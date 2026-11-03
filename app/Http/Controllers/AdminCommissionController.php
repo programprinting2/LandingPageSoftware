@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Affiliate;
 use App\Models\PaymentOrder;
+use App\Support\PaymentOrderVoucherDisplay;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -142,12 +143,17 @@ class AdminCommissionController extends Controller
         $payoutStatus = $commissionPaidAt ? 'paid' : 'pending';
         $customerName = $order->client?->company_name ?: $order->client?->user?->name ?: '—';
 
+        $voucher = PaymentOrderVoucherDisplay::fromOrder($order);
+
         return [
             'id' => $order->id,
             'order_id' => $order->order_id,
             'affiliate_id' => $order->affiliate_id,
             'affiliate_code' => $order->affiliate?->code ?? $order->referral_code ?? '—',
             'affiliate_name' => $order->affiliate?->user?->name,
+            'voucher_code' => $voucher['voucher_code'],
+            'voucher_kind' => $voucher['voucher_kind'],
+            'voucher_source_label' => $voucher['voucher_source_label'],
             'client_name' => $customerName,
             'package_name' => $order->package?->name ?? '—',
             'commission_amount' => $commissionAmount,

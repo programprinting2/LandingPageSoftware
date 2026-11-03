@@ -2,7 +2,7 @@
       <div class="dash-header"><h1>Manajemen Affiliate</h1><p>Daftar affiliate — client mengaktifkan sendiri dari portal Program Affiliate</p></div>
       <div class="dash-table-wrap">
         <div class="dash-table-header">
-          <h3 id="adminAffiliatesCount">{{ $affiliates->count() }} affiliate terdaftar</h3>
+          <h3 id="adminAffiliatesCount">— affiliate terdaftar</h3>
           <button type="button" class="btn btn-secondary" style="padding:8px 16px;font-size:12px;" onclick="switchDashPage('admin','users',document.querySelector('#dashAdmin .dash-nav-item[onclick*=users]'))">Buka User</button>
         </div>
         <table class="dash-table">
@@ -49,9 +49,9 @@
                 </td>
               </tr>
             @empty
-              <tr>
+              <tr class="admin-table-loading">
                 <td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">
-                  Belum ada affiliate terdaftar.
+                  Memuat…
                 </td>
               </tr>
             @endforelse
@@ -113,9 +113,9 @@
                     </div>
                   </div>
                     <div class="form-group">
-                    <label class="admin-app-label" for="adminAffiliateCode">Kode Affiliate <span class="admin-app-label-hint">(kosongkan untuk auto: AA0001)</span></label>
-                    <input class="admin-app-input" id="adminAffiliateCode" type="text" placeholder="AA0001" maxlength="6" style="font-family:var(--mono);text-transform:uppercase;">
-                    <p class="admin-app-label-hint" style="margin-top:8px;">Format: <strong>A</strong> (Affiliate) + <strong>huruf nama depan</strong> + <strong>nomor urut 4 digit</strong>. Contoh: Andi → AA0001, Budi → AB0001, Andi ke-2 → AA0002.</p>
+                    <label class="admin-app-label" for="adminAffiliateCode">Kode Affiliate <span class="admin-app-label-hint">(kosongkan untuk auto)</span></label>
+                    <input class="admin-app-input" id="adminAffiliateCode" type="text" placeholder="ABC123" maxlength="6" style="font-family:var(--mono);text-transform:uppercase;">
+                    <p class="admin-app-label-hint" style="margin-top:8px;">6 karakter huruf besar A–Z dan angka 0–9. Kata sistem (mis. ADMIN, NULL) tidak boleh dipakai.</p>
                   </div>
                   <div class="form-group" style="margin-bottom:0;">
                     <label class="admin-app-label" for="adminAffiliatePassword">Password <span class="admin-app-label-hint" id="adminAffiliatePasswordHint">(wajib)</span></label>
@@ -197,14 +197,22 @@
           </div>
         </div>
 
+        <div class="admin-affiliate-trx-toolbar">
+          <div class="admin-affiliate-trx-filters" id="adminAffiliateTrxFilters" role="group" aria-label="Filter status">
+            <button type="button" class="admin-affiliate-trx-filter is-active" data-status="all" onclick="setAdminAffiliateTrxStatusFilter('all')">Semua</button>
+            <button type="button" class="admin-affiliate-trx-filter" data-status="paid" onclick="setAdminAffiliateTrxStatusFilter('paid')">Paid</button>
+            <button type="button" class="admin-affiliate-trx-filter" data-status="expired" onclick="setAdminAffiliateTrxStatusFilter('expired')">Expired</button>
+          </div>
+          <span id="adminAffiliateTrxTableMeta" class="admin-affiliate-trx-meta"></span>
+        </div>
+
         <div class="admin-affiliate-trx-table-wrap">
           <table class="dash-table">
             <thead>
               <tr>
                 <th>Referensi</th>
-                <th>Customer</th>
-                <th>Paket</th>
-                <th>Tipe</th>
+                <th>Client</th>
+                <th>Deskripsi</th>
                 <th>Jumlah</th>
                 <th>Komisi</th>
                 <th>Status</th>
@@ -212,10 +220,11 @@
               </tr>
             </thead>
             <tbody id="adminAffiliateTransactionsBody">
-              <tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>
+              <tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>
             </tbody>
           </table>
         </div>
+        <div id="adminAffiliateTrxPagination" class="dash-pagination admin-affiliate-trx-pagination" hidden></div>
 
         <div class="admin-app-footer">
           <button type="button" class="admin-app-btn-cancel" onclick="closeAdminAffiliateTransactionsModal()">Tutup</button>

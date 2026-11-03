@@ -32,12 +32,18 @@ class LandingPricingService
 
             return [
                 'package_id' => $package->id,
+                'sort_order' => (int) $package->sort_order,
                 'name' => $package->name,
                 'is_trial' => (bool) $package->is_trial
                     || ((float) $package->price <= 0 && preg_match('/trial/i', $package->name)),
                 'price' => $this->formatPrice($package),
                 'price_amount' => (float) $package->price,
                 'period' => $this->formatPeriod($package, (float) $package->price),
+                'devices_quota' => (int) $package->devices_quota,
+                'duration_days' => (int) $package->duration_days,
+                'discount_percent' => (float) $package->discount_percent,
+                'device_slot_price' => (float) $package->device_slot_price,
+                'max_extra_device_slots' => (int) $package->max_extra_device_slots,
                 'features' => array_values(array_filter(array_map('strval', $features))),
                 'popular' => (bool) ($override['popular'] ?? $legacy['popular'] ?? false),
             ];

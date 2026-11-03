@@ -138,6 +138,20 @@ body:has(.app-dashboard.active) .td-mono {
   color: var(--orange);
 }
 
+body:has(.app-dashboard.active) .admin-voucher-code-text {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+body:has(.app-dashboard.active) .admin-voucher-code-text--affiliate {
+  color: var(--orange);
+}
+
+body:has(.app-dashboard.active) .admin-voucher-code-text--promo {
+  color: #10b981;
+}
+
 body:has(.app-dashboard.active) .td-bold {
   color: var(--navy);
 }
@@ -798,7 +812,7 @@ body:has(.app-dashboard.active) .dash-page.active {
   border: 1px solid var(--border, #e2e8f0);
   border-radius: 12px;
   box-shadow: var(--shadow, 0 4px 24px rgba(15, 23, 42, 0.06));
-  overflow: hidden;
+  overflow: visible;
 }
 
 .client-license-app-head {
@@ -847,11 +861,39 @@ body:has(.app-dashboard.active) .dash-page.active {
 }
 
 .client-license-app-meta {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 14px 16px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border, #e2e8f0);
+  overflow: visible;
+  position: relative;
+  z-index: 1;
+}
+
+.client-license-app-meta:has(.dash-action-gear-menu.is-open) {
+  z-index: 5;
+}
+
+.client-license-meta-main {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(48px, auto);
+  gap: 10px 14px;
+  min-width: 0;
+}
+
+.client-license-meta-main .client-license-meta-value {
+  font-size: 13px;
+}
+
+.client-license-meta-item--actions {
+  min-width: 0;
+  text-align: right;
+}
+
+.client-license-meta-item--actions .client-license-meta-label {
+  text-align: right;
+}
+
+.client-license-meta-item--actions .client-license-actions {
+  justify-content: flex-end;
 }
 
 .client-license-meta-item {
@@ -874,25 +916,289 @@ body:has(.app-dashboard.active) .dash-page.active {
   word-break: break-word;
 }
 
-.client-license-devices {
-  border-top: 1px solid var(--border, #e2e8f0);
+.client-license-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
 }
 
-.client-license-devices-head {
-  padding: 12px 20px 8px;
+.client-license-commerce-btn {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#clientLicensePackagesModal.open,
+#clientReportArchiveModal.open,
+#clientLicenseDevicesModal.open {
+  display: flex !important;
+  opacity: 1;
+  z-index: 2100;
+}
+
+.client-report-archive-modal-box {
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.2);
+  color: var(--text-1, #262626);
+  max-width: 440px;
+  width: calc(100% - 32px);
+  padding: 24px 24px 20px;
+}
+
+.client-report-archive-head h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.client-report-archive-head p {
+  margin: 0 0 14px;
   font-size: 13px;
-  font-weight: 700;
+  color: var(--text-3, #6b7280);
+  line-height: 1.45;
+}
+
+.client-report-archive-feedback {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--surface-2, #f8fafc);
   color: var(--text-2, #374151);
 }
 
-.client-license-devices .dash-table-wrap {
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
+.client-report-archive-feedback[hidden] {
+  display: none !important;
 }
 
-.client-license-devices .dash-table thead th {
+.client-report-archive-feedback.is-loading {
+  border-color: rgba(56, 126, 245, 0.25);
+  background: rgba(56, 126, 245, 0.06);
+  color: var(--text-2, #374151);
+}
+
+.client-report-archive-feedback.is-success {
+  border-color: rgba(22, 163, 74, 0.28);
+  background: rgba(22, 163, 74, 0.08);
+  color: #166534;
+}
+
+.client-report-archive-feedback.is-error {
+  border-color: rgba(225, 29, 72, 0.28);
+  background: rgba(225, 29, 72, 0.06);
+  color: #be123c;
+}
+
+.client-license-devices-modal-box {
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.2);
+  color: var(--text-1, #262626);
+  max-width: min(920px, calc(100vw - 32px));
+  width: calc(100% - 32px);
+  padding: 24px 24px 20px;
+}
+
+.client-license-devices-modal-head h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.client-license-devices-modal-head p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-3, #6b7280);
+  line-height: 1.45;
+}
+
+.client-license-devices-modal-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.client-license-devices-stat {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--surface-2, #f8fafc);
+}
+
+.client-license-devices-stat-label {
+  display: block;
   font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3, #6b7280);
+  margin-bottom: 4px;
+}
+
+.client-license-devices-stat-value {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-1, #0f172a);
+}
+
+.client-license-devices-hint {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-3, #6b7280);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(56, 126, 245, 0.05);
+  border: 1px solid rgba(56, 126, 245, 0.15);
+}
+
+.client-license-devices-modal-body {
+  max-height: min(58vh, 480px);
+  overflow: auto;
+}
+
+.client-license-devices-table-wrap {
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+}
+
+.client-license-devices-table thead th {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.client-license-devices-empty {
+  text-align: center;
+  padding: 28px 16px;
+  border: 1px dashed var(--border, #e2e8f0);
+  border-radius: 12px;
+  background: var(--surface-2, #f8fafc);
+}
+
+.client-license-devices-empty-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-1, #0f172a);
+}
+
+.client-license-devices-empty-text {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-3, #6b7280);
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 640px) {
+  .client-license-devices-modal-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.client-license-packages-modal-box {
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.2);
+  color: var(--text-1, #262626);
+  max-width: 480px;
+  width: calc(100% - 32px);
+}
+
+.client-license-packages-head h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.client-license-packages-head p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-3, #6b7280);
+  line-height: 1.45;
+}
+
+.client-license-packages-body {
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+}
+
+.client-license-packages-loading,
+.client-license-packages-empty {
+  font-size: 13px;
+  color: var(--text-3, #6b7280);
+  text-align: center;
+  padding: 20px 8px;
+  line-height: 1.5;
+}
+
+.client-license-packages-list {
+  display: grid;
+  gap: 10px;
+}
+
+.client-license-package-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 14px;
+  text-align: left;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  background: var(--surface-2, #f8fafc);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.client-license-package-option:hover {
+  border-color: rgba(56, 126, 245, 0.45);
+  background: rgba(56, 126, 245, 0.04);
+}
+
+.client-license-package-option-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.client-license-package-option-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-1, #0f172a);
+}
+
+.client-license-package-option-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2, #374151);
+}
+
+.client-license-package-option-period {
+  font-weight: 500;
+  color: var(--text-3, #6b7280);
+}
+
+.client-license-package-option-btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 11px;
+  pointer-events: none;
 }
 
 .client-license-deactivate {
@@ -907,19 +1213,40 @@ body:has(.app-dashboard.active) .dash-page.active {
 }
 
 @media (max-width: 1024px) {
-  .client-license-app-meta {
+  .client-license-meta-main {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .client-license-meta-item--actions {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+  }
+
+  .client-license-meta-item--actions .client-license-meta-label {
+    text-align: left;
+    margin-bottom: 0;
+    flex: 0 0 auto;
+    padding-top: 6px;
+  }
+
+  .client-license-meta-item--actions .client-license-actions {
+    flex: 0 0 auto;
+    justify-content: flex-end;
   }
 }
 
 @media (max-width: 640px) {
-  .client-license-app-meta {
+  .client-license-meta-main {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 420px) {
-  .client-license-app-meta {
+  .client-license-meta-main {
     grid-template-columns: 1fr;
   }
 }
@@ -1163,54 +1490,209 @@ body:has(.app-dashboard.active) .admin-licenses-toolbar .admin-invoice-filter {
   white-space: pre-line;
 }
 
-.client-billing-pending {
-  margin-bottom: 20px;
-}
-
-.client-billing-pending h3 {
-  margin: 0 0 12px;
-  font-size: 1rem;
-}
-
-.client-billing-pending-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.client-billing-pending-item {
+.client-billing-status-cell {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
 
-.client-billing-pending-meta {
-  display: block;
-  font-size: 0.875rem;
-  color: var(--text-3);
-  margin-top: 4px;
+.client-billing-pay-btn {
+  flex-shrink: 0;
 }
 
-.admin-license-actions {
+/* Checkout modal (client dashboard — styles also on landing.css) */
+.checkout-modal-box {
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.2);
+  color: var(--text-1, #262626);
+  max-width: 440px;
+}
+
+.checkout-modal-head h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.checkout-modal-head p {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-3, #6b7280);
+  line-height: 1.45;
+}
+
+.checkout-summary {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--surface-2, #f8fafc);
+  border: 1px solid var(--border, #e2e8f0);
+}
+
+.checkout-summary > div {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.checkout-summary strong {
+  text-align: right;
+  font-weight: 700;
+}
+
+.checkout-label {
+  color: var(--text-3, #6b7280);
+  flex-shrink: 0;
+}
+
+.checkout-actions {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.checkout-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-3, #6b7280);
+}
+
+.checkout-paid {
+  padding: 14px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.checkout-paid p {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+#admin-licenses .dash-table-wrap {
+  overflow-x: auto;
+}
+
+#admin-licenses .admin-licenses-table {
+  min-width: 1040px;
+}
+
+#admin-licenses .admin-licenses-table thead th:last-child,
+#admin-licenses .admin-license-actions-cell {
+  text-align: right;
+  white-space: nowrap;
+  width: 1%;
+}
+
+#admin-licenses .admin-license-actions-cell {
+  padding-left: 12px;
+  padding-right: 16px;
+  vertical-align: middle;
+  overflow: visible;
+  position: relative;
+}
+
+.dash-action-gear-wrap {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.dash-action-gear-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px !important;
+  line-height: 0;
+  min-height: 0;
+}
+
+.dash-action-gear-trigger--labeled {
+  gap: 5px;
+  line-height: 1.2;
+  padding: 6px 9px !important;
+  white-space: nowrap;
+}
+
+.dash-action-gear-trigger-label {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: inherit;
+}
+
+.dash-action-gear-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 60;
+  min-width: 188px;
+  padding: 6px;
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  display: none;
+  flex-direction: column;
+  align-items: stretch;
   gap: 4px;
-  max-width: 280px;
+}
+
+.dash-action-gear-menu.is-open {
+  display: flex;
+}
+
+.dash-action-gear-menu.dash-action-gear-menu--fixed {
+  position: fixed;
+  right: auto;
+  top: auto;
+  bottom: auto;
+}
+
+.dash-action-gear-menu-item {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  margin: 0;
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .admin-license-action-btn {
-  padding: 4px 10px;
-  font-size: 11px;
-  margin-right: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  margin: 0;
+  min-height: 0;
 }
 
 .admin-license-revoke-btn:not(:disabled) {
   color: var(--rose);
+}
+
+.admin-license-package-modal .admin-license-package-body {
+  padding: 0 24px 8px;
+}
+
+.admin-license-package-modal .admin-app-footer {
+  margin-top: 8px;
 }
 
 .admin-license-action-btn:disabled {
@@ -1220,4 +1702,8 @@ body:has(.app-dashboard.active) .admin-licenses-toolbar .admin-invoice-filter {
   color: var(--text-3) !important;
   border-color: var(--border);
   background: #f1f5f9;
+}
+
+.client-license-packages-voucher {
+  margin-bottom: 14px;
 }

@@ -85,7 +85,6 @@ class ClientCommerceService
         $active = $owned && $this->isPivotActive($owned);
         $expired = $owned && ! $active;
         $isCurrent = $currentPackage && (int) $currentPackage->id === (int) $package->id;
-        $everPaid = $this->hasEverPaidForPackage($user->client, (int) $package->id);
 
         if ($isCurrent && $active) {
             return ['action' => 'check_license', 'label' => 'Lihat Lisensi', 'enabled' => true];
@@ -104,9 +103,7 @@ class ClientCommerceService
         }
 
         if ($expired || ! $owned) {
-            $label = $everPaid ? 'Perpanjang' : 'Beli '.$package->name;
-
-            return ['action' => 'checkout', 'label' => $label, 'enabled' => true];
+            return ['action' => 'checkout', 'label' => 'Beli '.$package->name, 'enabled' => true];
         }
 
         return ['action' => 'checkout', 'label' => 'Beli '.$package->name, 'enabled' => true];
@@ -186,8 +183,13 @@ class ClientCommerceService
         ];
     }
 
-    public function beginCheckout(User $user, int $packageId, string $applicationSlug, ?string $referralCode): array
-    {
+    public function beginCheckout(
+        User $user,
+        int $packageId,
+        string $applicationSlug,
+        ?string $referralCode,
+        ?int $totalDevices = null,
+    ): array {
         $validation = $this->validateCheckout($user, $packageId, $applicationSlug);
         if (($validation['status'] ?? '') === 'error') {
             return $validation;
@@ -205,6 +207,42 @@ class ClientCommerceService
             $application,
             $orderType,
             $validation['current_package'] ?? null,
+            $referralCode,
+            $totalDevices,
+        );
+    }
+
+    public function beginDeviceSlotCheckout(
+        User $user,
+        string $applicationSlug,
+        int $additionalSlots,
+        ?string $referralCode,
+    ): array {
+        $user->loadMissing('client');
+        if (! $user->client) {
+            return ['status' => 'error', 'message' => 'Akun client tidak ditemukan.'];
+        }
+
+        $application = $this->resolveApplication($applicationSlug);
+        if (! $application) {
+            return ['status' => 'error', 'message' => 'Aplikasi tidak ditemukan.'];
+        }
+
+        $owned = $this->ownedApplication($user, $application);
+        if (! $owned || ! $this->isPivotActive($owned)) {
+            return ['status' => 'error', 'message' => 'Lisensi tidak aktif.'];
+        }
+
+        $currentPackage = $this->currentPackage($owned);
+        if (! $currentPackage || $this->isTrialLikePackage($currentPackage)) {
+            return ['status' => 'error', 'message' => 'Tambah perangkat tidak tersedia untuk paket ini.'];
+        }
+
+        return $this->paymentService->createDeviceSlotOrder(
+            $user,
+            $application,
+            $currentPackage,
+            $additionalSlots,
             $referralCode,
         );
     }
@@ -266,6 +304,8 @@ class ClientCommerceService
         if ($owned) {
             if ($active) {
                 $orderType = 'upgrade';
+            } elseif ($currentPackage && $this->isTrialLikePackage($currentPackage)) {
+                $orderType = 'upgrade';
             } elseif ($currentPackage && (int) $currentPackage->id === (int) $targetPackage->id) {
                 $orderType = 'renew';
             } elseif ($this->hasEverPaidForPackage($user->client, (int) $targetPackage->id)) {
@@ -311,26 +351,223 @@ class ClientCommerceService
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function pendingOrdersForUser(User $user): array
+    public function pendingOrdersForUser(User $user, bool $reconcileStale = true): array
     {
+        if ($reconcileStale) {
+            $this->paymentService->reconcileStalePendingOrdersForUser($user);
+            $this->paymentService->expireLocalOverduePendingOrdersForUser($user);
+        }
+
         return PaymentOrder::query()
             ->where('user_id', $user->id)
-            ->where('status', 'pending')
-            ->with(['package:id,name', 'application:id,name'])
+            ->whereIn('status', ['pending', 'expired'])
+            ->with(['package:id,name', 'application:id,name,slug'])
             ->latest('id')
+            ->limit(50)
             ->get()
-            ->map(fn (PaymentOrder $order) => [
-                'order_id' => $order->order_id,
-                'amount_label' => 'Rp '.number_format((float) $order->amount, 0, ',', '.'),
-                'status' => $order->status,
-                'payment_page_url' => $order->payment_page_url,
-                'expires_at_label' => $order->expires_at?->format('d M Y H:i'),
-                'package_name' => $order->package?->name,
-                'application_name' => $order->application?->name,
-                'simulate_available' => $this->paymentService->allowsSimulatePayment(),
-            ])
+            ->map(function (PaymentOrder $order) {
+                $pastDue = $order->expires_at instanceof Carbon
+                    && $order->expires_at->isPast();
+                $payable = $order->status === 'pending'
+                    && ! $pastDue
+                    && ($order->expires_at === null || $order->expires_at->isFuture());
+
+                return [
+                    'order_id' => $order->order_id,
+                    'type' => $order->type,
+                    'description' => $this->billingOrderDescription($order),
+                    'amount_label' => 'Rp '.number_format((float) $order->amount, 0, ',', '.'),
+                    'status' => $order->status,
+                    'status_label' => ($payable && $order->status === 'pending')
+                        ? 'Menunggu bayar'
+                        : 'Expired',
+                    'is_payable' => $payable,
+                    'payment_page_url' => $order->payment_page_url,
+                    'created_at' => $order->created_at?->toIso8601String(),
+                    'created_at_label' => $order->created_at?->format('d M Y H:i'),
+                    'expires_at' => $order->expires_at?->toIso8601String(),
+                    'expires_at_label' => $order->expires_at?->format('d M Y H:i'),
+                    'package_name' => $order->package?->name,
+                    'application_name' => $order->application?->name,
+                    'application_slug' => $order->application?->slug,
+                    'simulate_available' => $payable && $this->paymentService->allowsSimulatePayment(),
+                ];
+            })
             ->values()
             ->all();
+    }
+
+    public function billingOrderDescription(PaymentOrder $order): string
+    {
+        $order->loadMissing(['application:id,name', 'package:id,name']);
+
+        $applicationName = $order->application?->name ?? 'Aplikasi';
+        $packageName = $order->package?->name ?? 'Paket';
+
+        if ($order->type === 'device_slots') {
+            $additional = (int) data_get($order->meta, 'additional_device_slots', 0);
+
+            return $this->formatDeviceSlotsBillingDescription($applicationName, $packageName, $additional);
+        }
+
+        if ($order->type === 'upgrade') {
+            $fromPackageId = (int) data_get($order->meta, 'current_package_id', 0);
+            $extraSlots = $this->extraDeviceSlotsFromMeta($order->meta);
+
+            return $this->formatUpgradeBillingDescription(
+                $applicationName,
+                $packageName,
+                $fromPackageId > 0 ? $this->packageNameById($fromPackageId) : null,
+                $extraSlots,
+            );
+        }
+
+        $extraSlots = $this->extraDeviceSlotsFromMeta($order->meta);
+
+        return match ($order->type) {
+            'renew' => $this->formatPackageBillingDescription('Perpanjang', $applicationName, $packageName, $extraSlots),
+            'purchase' => $this->formatPackageBillingDescription('Beli', $applicationName, $packageName, $extraSlots),
+            default => $this->formatPackageBillingDescription('Pembayaran', $applicationName, $packageName, $extraSlots),
+        };
+    }
+
+    public function billingTransactionDescription(\App\Models\Transaction $transaction): string
+    {
+        $transaction->loadMissing(['application:id,name', 'package:id,name']);
+
+        $applicationName = $transaction->application?->name ?? 'Aplikasi';
+        $packageName = $transaction->package?->name ?? 'Paket';
+
+        if ($transaction->type === 'device_slots') {
+            $additional = (int) data_get($transaction->meta, 'additional_device_slots', 0);
+            if ($additional <= 0 && is_string($transaction->description) && preg_match('/\+(\d+)/', $transaction->description, $m)) {
+                $additional = (int) $m[1];
+            }
+
+            return $this->formatDeviceSlotsBillingDescription($applicationName, $packageName, $additional);
+        }
+
+        if ($transaction->type === 'upgrade') {
+            $fromPackageId = (int) data_get($transaction->meta, 'from_package_id', 0);
+            $fromName = $fromPackageId > 0
+                ? $this->packageNameById($fromPackageId)
+                : $this->parseUpgradeFromNameFromLegacyDescription($transaction->description);
+            $extraSlots = $this->extraDeviceSlotsFromMeta($transaction->meta);
+
+            return $this->formatUpgradeBillingDescription($applicationName, $packageName, $fromName, $extraSlots);
+        }
+
+        $extraSlots = $this->extraDeviceSlotsFromMeta($transaction->meta);
+
+        return match ($transaction->type) {
+            'renew' => $this->formatPackageBillingDescription('Perpanjang', $applicationName, $packageName, $extraSlots),
+            'purchase' => $this->formatPackageBillingDescription('Beli', $applicationName, $packageName, $extraSlots),
+            default => $this->formatPackageBillingDescription(
+                $this->humanizeBillingAction($transaction->type),
+                $applicationName,
+                $packageName,
+                $extraSlots,
+            ),
+        };
+    }
+
+    private function extraDeviceSlotsFromMeta(mixed $meta): int
+    {
+        return max(0, (int) data_get($meta, 'extra_device_slots', 0));
+    }
+
+    private function formatPackageBillingDescription(
+        string $action,
+        string $applicationName,
+        string $packageName,
+        int $extraDeviceSlots = 0,
+    ): string {
+        $packageLabel = $this->formatPackageLabelWithExtraDevices($packageName, $extraDeviceSlots);
+
+        return sprintf('%s — %s (%s)', $action, $applicationName, $packageLabel);
+    }
+
+    private function formatPackageLabelWithExtraDevices(string $packageName, int $extraDeviceSlots): string
+    {
+        $name = trim($packageName) !== '' ? trim($packageName) : 'Paket';
+        if ($extraDeviceSlots <= 0) {
+            return $name;
+        }
+
+        return sprintf('%s · +%d device', $name, $extraDeviceSlots);
+    }
+
+    private function formatDeviceSlotsBillingDescription(
+        string $applicationName,
+        string $packageName,
+        int $additionalSlots,
+    ): string {
+        return sprintf(
+            'Tambah device +%d — %s (%s)',
+            max(1, $additionalSlots),
+            $applicationName,
+            $packageName,
+        );
+    }
+
+    private function formatUpgradeBillingDescription(
+        string $applicationName,
+        string $targetPackageName,
+        ?string $fromPackageName,
+        int $extraDeviceSlots = 0,
+    ): string {
+        $from = trim((string) $fromPackageName);
+        $to = trim($targetPackageName);
+
+        if ($from !== '' && $to !== '' && strcasecmp($from, $to) !== 0) {
+            $detail = sprintf('%s → %s', $from, $this->formatPackageLabelWithExtraDevices($to, $extraDeviceSlots));
+
+            return sprintf('Upgrade — %s (%s)', $applicationName, $detail);
+        }
+
+        return $this->formatPackageBillingDescription(
+            'Upgrade',
+            $applicationName,
+            $to !== '' ? $to : 'Paket',
+            $extraDeviceSlots,
+        );
+    }
+
+    private function parseUpgradeFromNameFromLegacyDescription(?string $description): ?string
+    {
+        if (! is_string($description) || $description === '') {
+            return null;
+        }
+
+        if (preg_match('/:\s*(.+?)\s*→\s*.+$/u', $description, $m)) {
+            return trim($m[1]);
+        }
+
+        if (preg_match('/Upgrade\s+.+?\s*—\s*(.+)$/u', $description, $m)) {
+            return trim($m[1]);
+        }
+
+        return null;
+    }
+
+    private function packageNameById(int $packageId): ?string
+    {
+        if ($packageId <= 0) {
+            return null;
+        }
+
+        return ApplicationPackage::query()->whereKey($packageId)->value('name');
+    }
+
+    private function humanizeBillingAction(?string $type): string
+    {
+        return match ($type) {
+            'renew' => 'Perpanjang',
+            'purchase' => 'Beli',
+            'upgrade' => 'Upgrade',
+            'device_slots' => 'Tambah device',
+            default => ucfirst((string) $type),
+        };
     }
 
     private function hasAnyPaidOrderForApplication(Client $client, Application $application): bool

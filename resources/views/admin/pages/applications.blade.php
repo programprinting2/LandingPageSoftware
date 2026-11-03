@@ -52,6 +52,10 @@
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
                   Detail Paket
                 </button>
+                <button type="button" class="admin-app-nav-item" data-panel="notification" onclick="switchAdminApplicationPanel('notification', this)">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  Notifikasi
+                </button>
               </nav>
             </aside>
 
@@ -144,7 +148,7 @@
                           <th class="col-pkg-discount-head">Discount %</th>
                           <th class="col-pkg-commission-fixed-head">Komisi Rp</th>
                           <th class="col-pkg-commission-percent-head">Komisi %</th>
-                          <th class="col-pkg-actions-head"></th>
+                          <th class="col-pkg-actions-head" scope="col" aria-label="Aksi"></th>
                         </tr>
                       </thead>
                       <tbody id="adminApplicationPackagesBody"></tbody>
@@ -153,6 +157,79 @@
                   <div id="adminApplicationPackagesEmpty" class="admin-app-packages-empty">Belum ada paket. Klik “Tambah Paket”.</div>
                 </div>
               </section>
+
+              <section class="admin-app-panel" data-panel="notification">
+                <div class="admin-app-panel-head">
+                  <h4>Notifikasi saat aplikasi dibuka</h4>
+                  <p>Popup gambar di desktop saat user membuka aplikasi (sesuai paket yang dicentang).</p>
+                </div>
+                <div class="admin-app-panel-body">
+                  <div class="admin-app-toggle-row">
+                    <label class="admin-app-toggle">
+                      <input id="adminApplicationNotificationEnabled" type="checkbox">
+                      <span class="admin-app-toggle-ui"></span>
+                    </label>
+                    <div>
+                      <div class="admin-app-toggle-title">Tampilkan popup</div>
+                      <div class="admin-app-toggle-desc">Aktifkan notifikasi startup di aplikasi desktop</div>
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-top:18px;">
+                    <label class="admin-app-label">Gambar popup</label>
+                    <input type="hidden" id="adminApplicationNotificationImageUrl" value="">
+                    <div class="admin-app-logo-field">
+                      <div id="adminApplicationNotificationImagePreview" class="admin-app-logo-preview admin-app-notification-preview">
+                        <span class="admin-app-logo-empty">Belum ada gambar</span>
+                      </div>
+                      <div class="admin-app-logo-actions">
+                        <label class="admin-app-btn-outline admin-app-logo-pick">
+                          Unggah gambar
+                          <input type="file" id="adminApplicationNotificationImageFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden onchange="uploadAdminApplicationNotificationImage(this)">
+                        </label>
+                        <button type="button" class="admin-app-btn-outline" id="adminApplicationNotificationImageClearBtn" hidden onclick="clearAdminApplicationNotificationImage()">Hapus</button>
+                      </div>
+                    </div>
+                    <p class="admin-app-label-hint" style="margin-top:8px;">PNG/JPG/WebP/GIF, maks. 5 MB. Disarankan banner landscape.</p>
+                  </div>
+                  <div class="form-group">
+                    <label class="admin-app-label">Tampilkan untuk paket</label>
+                    <p class="admin-app-label-hint" style="margin:0 0 10px;">Hanya user dengan paket aktif yang dicentang yang melihat popup.</p>
+                    <div id="adminApplicationNotificationPackages" class="admin-app-notification-packages"></div>
+                    <div id="adminApplicationNotificationPackagesEmpty" class="admin-app-packages-empty">Simpan paket di tab Detail Paket terlebih dahulu (paket harus punya ID).</div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <div class="admin-pkg-features-overlay" id="adminPackageDeviceSlotsModal" hidden>
+            <div class="admin-pkg-features-dialog" role="dialog" aria-modal="true" aria-labelledby="adminPackageDeviceSlotsTitle">
+              <div class="admin-pkg-features-head">
+                <div>
+                  <h4 id="adminPackageDeviceSlotsTitle">Slot perangkat tambahan</h4>
+                  <p id="adminPackageDeviceSlotsSubtitle">Harga per slot ekstra dan batas maksimum (di atas limit default paket)</p>
+                </div>
+                <button type="button" class="admin-app-modal-close" onclick="closeAdminPackageDeviceSlotsModal()" aria-label="Tutup">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+              </div>
+              <div class="admin-pkg-features-body">
+                <section class="admin-pkg-features-section">
+                  <label class="admin-pkg-features-field">
+                    <span class="admin-pkg-features-option-label">Harga per slot (Rp)</span>
+                    <input class="admin-app-input" id="adminPkgDeviceSlotPrice" type="text" inputmode="numeric" placeholder="Rp 0">
+                  </label>
+                  <label class="admin-pkg-features-field">
+                    <span class="admin-pkg-features-option-label">Maks. slot tambahan</span>
+                    <input class="admin-app-input" id="adminPkgMaxExtraDeviceSlots" type="number" min="0" max="99" value="0">
+                  </label>
+                  <p class="admin-pkg-features-hint">Contoh: limit default 2 + maks 3 slot → klien bisa checkout hingga 5 perangkat total.</p>
+                </section>
+              </div>
+              <div class="admin-pkg-features-foot">
+                <button type="button" class="admin-app-btn-cancel" onclick="closeAdminPackageDeviceSlotsModal()">Batal</button>
+                <button type="button" class="admin-app-btn-save" onclick="saveAdminPackageDeviceSlotsModal()">Simpan</button>
+              </div>
             </div>
           </div>
 

@@ -1,6 +1,5 @@
 ﻿    <div id="client-billing" class="dash-page">
       <div class="dash-header"><h1>Riwayat Pembayaran</h1><p>Detail transaksi dan invoice Anda</p></div>
-      <div id="clientBillingPending" hidden></div>
       <div class="dash-table-wrap">
         <div class="dash-table-header"><h3 id="clientBillingCount">Memuat…</h3></div>
         <table class="dash-table">

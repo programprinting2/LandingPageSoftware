@@ -32,8 +32,11 @@ class UpdateAdminApplicationRequest extends FormRequest
             'is_active' => ['sometimes', 'boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'packages' => ['nullable', 'array'],
+            'packages.*.id' => ['nullable', 'integer', 'min:1'],
             'packages.*.name' => ['required', 'string', 'max:100'],
             'packages.*.devices_quota' => ['required', 'integer', 'min:1', 'max:999'],
+            'packages.*.device_slot_price' => ['nullable', 'numeric', 'min:0'],
+            'packages.*.max_extra_device_slots' => ['nullable', 'integer', 'min:0', 'max:99'],
             'packages.*.duration_days' => ['required', 'integer', 'min:0', 'max:36500'],
             'packages.*.price' => ['required', 'numeric', 'min:0'],
             'packages.*.discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
@@ -42,6 +45,10 @@ class UpdateAdminApplicationRequest extends FormRequest
             'packages.*.sort_order' => ['nullable', 'integer', 'min:0', 'max:9999'],
             'packages.*.parallel_max' => ['nullable', 'integer', 'min:1', 'max:99'],
             'packages.*.feature_uv' => ['sometimes', 'boolean'],
+            'notification_enabled' => ['sometimes', 'boolean'],
+            'notification_image_url' => ['nullable', 'string', 'max:500'],
+            'notification_package_ids' => ['nullable', 'array'],
+            'notification_package_ids.*' => ['integer', 'min:1'],
         ];
     }
 

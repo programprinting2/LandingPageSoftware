@@ -20,6 +20,7 @@ class StoreClientCheckoutRequest extends FormRequest
             'package_id' => ['required', 'integer', 'min:1'],
             'application_slug' => ['nullable', 'string', 'max:120'],
             'referral_code' => ['nullable', 'string', 'max:32'],
+            'total_devices' => ['nullable', 'integer', 'min:1', 'max:999'],
         ];
     }
 }

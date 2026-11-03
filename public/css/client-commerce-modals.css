@@ -1,0 +1,283 @@
+/* Shared checkout / device-slot modals (landing + client dashboard) */
+
+#clientLicenseDeviceSlotsModal.open,
+#checkoutModal.open {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+}
+
+#clientLicenseDeviceSlotsModal.open {
+  z-index: 4800;
+}
+
+#checkoutModal.open {
+  z-index: 5000;
+}
+
+.client-license-device-slots-modal-box {
+  background: var(--surface-1, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.2);
+  color: var(--text-1, #262626);
+  max-width: 520px;
+  width: calc(100% - 24px);
+  padding: 28px 24px 24px;
+}
+
+.client-license-device-slots-head {
+  padding-right: 28px;
+}
+
+.client-license-device-slots-head h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-1, #0f172a);
+}
+
+.client-license-device-slots-head p {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--text-3, #64748b);
+  line-height: 1.45;
+}
+
+.client-license-device-slots-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.client-license-device-slots-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border, #e2e8f0);
+  font-size: 13px;
+}
+
+.client-license-device-slots-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.client-license-device-slots-summary-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-2, #475569);
+  line-height: 1.45;
+}
+
+.client-license-device-slots-summary-amount {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--text-1, #0f172a);
+  text-align: right;
+  line-height: 1.45;
+}
+
+.client-license-device-slots-total {
+  padding-top: 10px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border, #e2e8f0);
+  font-weight: 700;
+}
+
+.client-license-device-slots-field-label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2, #475569);
+}
+
+.client-license-device-slots-voucher {
+  display: flex;
+  flex-direction: column;
+}
+
+.client-license-device-slots-voucher-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text-1, #0f172a);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.client-license-device-slots-voucher-input::placeholder {
+  color: var(--text-3, #94a3b8);
+}
+
+.client-license-device-slots-voucher-input:focus {
+  outline: none;
+  border-color: #ff5500;
+  box-shadow: 0 0 0 3px rgba(255, 85, 0, 0.12);
+}
+
+.client-license-device-slots-voucher-row {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.client-license-device-slots-voucher-row .client-license-device-slots-voucher-input {
+  flex: 1;
+  min-width: 0;
+  font-family: Consolas, 'Segoe UI Mono', ui-monospace, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.client-license-device-slots-voucher-apply {
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.client-license-device-slots-referral-status {
+  min-height: 18px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.client-license-device-slots-referral-status.is-valid {
+  color: #059669;
+}
+
+.client-license-device-slots-referral-status.is-invalid {
+  color: #dc2626;
+}
+
+.client-license-device-slots-referral-status.is-checking {
+  color: var(--text-3, #6b7280);
+  font-weight: 500;
+}
+
+.client-license-device-slots-voucher-input.is-valid {
+  border-color: #059669;
+}
+
+.client-license-device-slots-voucher-input.is-invalid {
+  border-color: #dc2626;
+}
+
+.client-license-device-slots-summary-discount .client-license-device-slots-summary-discount-amount {
+  color: #059669;
+}
+
+.client-license-device-slots-device-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border, #e2e8f0);
+}
+
+.client-license-device-slots-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+
+.client-license-device-slots-step-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 !important;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.client-license-device-slots-input {
+  width: 80px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 10px 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text-1, #0f172a);
+}
+
+.client-license-device-slots-limit-info {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #b45309;
+  text-align: left;
+}
+
+.client-license-device-slots-limit-info[hidden] {
+  display: none;
+}
+
+.client-license-device-slots-footnote {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-3, #64748b);
+  line-height: 1.5;
+  text-align: left;
+}
+
+.client-license-device-slots-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 4px;
+}
+
+.client-license-device-slots-foot .btn {
+  min-width: 0;
+  font-size: 13px;
+  padding: 10px 16px;
+}
+
+.checkout-summary-row-total strong {
+  font-size: 15px;
+}
+
+.checkout-summary-row-muted .checkout-label {
+  font-size: 12px;
+}
+
+@media (max-width: 480px) {
+  .client-license-device-slots-foot {
+    flex-direction: column-reverse;
+  }
+
+  .client-license-device-slots-foot .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .client-license-device-slots-voucher-row {
+    flex-direction: column;
+  }
+
+  .client-license-device-slots-voucher-apply {
+    width: 100%;
+  }
+}

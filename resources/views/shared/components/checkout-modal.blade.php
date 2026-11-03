@@ -9,11 +9,7 @@
     </div>
     <div id="checkoutAlert" class="auth-alert" style="display:none;"></div>
     <div id="checkoutBody" class="checkout-modal-body">
-      <div class="checkout-summary">
-        <div><span class="checkout-label">Paket</span><strong id="checkoutPackageName">—</strong></div>
-        <div><span class="checkout-label">Total</span><strong id="checkoutAmountLabel">—</strong></div>
-        <div><span class="checkout-label">Berlaku hingga</span><strong id="checkoutExpiresLabel">—</strong></div>
-      </div>
+      <div class="checkout-summary" id="checkoutSummary" aria-live="polite"></div>
       <div id="checkoutPaymentActions" class="checkout-actions">
         <a id="checkoutPaymentLink" class="btn btn-primary btn-full" href="#" target="_blank" rel="noopener noreferrer" hidden>Buka halaman pembayaran QRIS</a>
         <button type="button" id="checkoutSimulateBtn" class="btn btn-secondary btn-full" hidden onclick="simulateClientCheckout()">Simulasikan pembayaran (sandbox)</button>

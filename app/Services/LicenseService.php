@@ -12,6 +12,8 @@ use Illuminate\Support\Str;
 
 class LicenseService
 {
+    public function __construct(private DeviceSlotService $deviceSlots) {}
+
     public function status(User $user, string $programId, string $applicationSlug = 'spot-color'): array
     {
         $programId = $this->normalizeProgramId($programId);
@@ -42,6 +44,7 @@ class LicenseService
             'access_info' => $thisDevice?->access_info,
             'source' => 'server',
             'features' => $this->featuresForUser($user, $application),
+            'startup_notification' => $this->startupNotificationPayload($application, $user),
         ], $this->licenseInfoPayload($user, $application), $this->serverTimePayload());
     }
 
@@ -170,15 +173,26 @@ class LicenseService
     public function listDevicesPublic(User $user, string $currentProgramId = '', string $applicationSlug = 'spot-color'): array
     {
         $currentProgramId = $this->normalizeProgramId($currentProgramId);
-        $context = $this->resolveLicenseContext($user, $applicationSlug, false);
+        $user->loadMissing('client.applications');
 
-        if (isset($context['status']) && $context['status'] === 'error') {
-            return $context;
+        if (! $user->client) {
+            return [
+                'status' => 'error',
+                'message' => 'Akun client tidak ditemukan',
+            ];
         }
 
-        /** @var Application $application */
-        $application = $context['application'];
-        $devicesMax = $context['devices_max'];
+        $application = $this->resolveApplication($applicationSlug);
+
+        if (! $application) {
+            return [
+                'status' => 'error',
+                'message' => 'Aplikasi tidak ditemukan atau tidak aktif',
+            ];
+        }
+
+        $owned = $user->client->applications->firstWhere('id', $application->id);
+        $devicesMax = $this->devicesMaxFor($user, $application, $owned?->pivot);
 
         $devices = LicenseDevice::where('user_id', $user->id)
             ->where('application_id', $application->id)
@@ -198,12 +212,18 @@ class LicenseService
                 ->values()
                 ->all(),
             'features' => $this->featuresForUser($user, $application),
+            'startup_notification' => $this->startupNotificationPayload($application, $user),
         ], $this->licenseInfoPayload($user, $application), $this->serverTimePayload());
     }
 
-    public function upgradePackage(User $user, int $packageId, string $applicationSlug = 'spot-color', ?string $referralCode = null): array
-    {
-        return app(ClientCommerceService::class)->beginCheckout($user, $packageId, $applicationSlug, $referralCode);
+    public function upgradePackage(
+        User $user,
+        int $packageId,
+        string $applicationSlug = 'spot-color',
+        ?string $referralCode = null,
+        ?int $totalDevices = null,
+    ): array {
+        return app(ClientCommerceService::class)->beginCheckout($user, $packageId, $applicationSlug, $referralCode, $totalDevices);
     }
 
     public function validateUpgradeRequest(User $user, int $packageId, string $applicationSlug = 'spot-color'): array
@@ -303,18 +323,24 @@ class LicenseService
         ApplicationPackage $targetPackage,
         ?ApplicationPackage $currentPackage,
         string $orderType,
+        int $extraDeviceSlots = 0,
     ): void {
         $user->loadMissing('client');
+        $this->deviceSlots->clearRegisteredDevices($user, $application->id);
+
         $purchasedAt = now();
         $expiresAt = (int) $targetPackage->duration_days > 0
             ? $purchasedAt->copy()->addDays((int) $targetPackage->duration_days)
             : null;
 
         $status = $targetPackage->is_trial ? 'trial' : 'active';
+        $extraDeviceSlots = max(0, min((int) $extraDeviceSlots, (int) $targetPackage->max_extra_device_slots));
+        $effectiveMax = $this->deviceSlots->effectiveDevicesMax($targetPackage, $extraDeviceSlots);
 
         $pivotPayload = [
             'application_package_id' => $targetPackage->id,
-            'devices_max' => (int) $targetPackage->devices_quota,
+            'devices_max' => $effectiveMax,
+            'extra_device_slots' => $extraDeviceSlots,
             'status' => $status,
             'purchased_at' => $purchasedAt,
             'expires_at' => $expiresAt,
@@ -330,6 +356,7 @@ class LicenseService
         }
 
         $transactionService = app(TransactionService::class);
+        $slotMeta = ['extra_device_slots' => $extraDeviceSlots];
 
         match ($orderType) {
             'trial' => $transactionService->recordPurchase(
@@ -338,19 +365,21 @@ class LicenseService
                 $targetPackage,
                 'trial',
                 $purchasedAt,
-                ['trial_activation' => true],
+                array_merge(['trial_activation' => true], $slotMeta),
             ),
             'renew' => $transactionService->recordRenew(
                 $user->client,
                 $application,
                 $targetPackage,
                 'qris',
+                $slotMeta,
             ),
             'purchase' => $transactionService->recordPurchase(
                 $user->client,
                 $application,
                 $targetPackage,
                 'qris',
+                $slotMeta,
             ),
             default => $transactionService->recordUpgrade(
                 $user,
@@ -358,8 +387,35 @@ class LicenseService
                 $targetPackage,
                 $currentPackage,
                 'qris',
+                $slotMeta,
             ),
         };
+
+        $user->refresh();
+        $user->load('client.applications');
+    }
+
+    public function addExtraDeviceSlots(User $user, Application $application, int $additionalSlots): void
+    {
+        $user->loadMissing('client.applications');
+        $owned = $user->client?->applications->firstWhere('id', $application->id);
+
+        if (! $owned) {
+            return;
+        }
+
+        $package = $owned->pivot->application_package_id
+            ? ApplicationPackage::find($owned->pivot->application_package_id)
+            : null;
+
+        $currentExtra = (int) ($owned->pivot->extra_device_slots ?? 0);
+        $newExtra = $currentExtra + max(0, $additionalSlots);
+        $effectiveMax = $this->deviceSlots->effectiveDevicesMax($package, $newExtra);
+
+        $user->client->applications()->updateExistingPivot($application->id, [
+            'extra_device_slots' => $newExtra,
+            'devices_max' => $effectiveMax,
+        ]);
 
         $user->refresh();
         $user->load('client.applications');
@@ -370,28 +426,52 @@ class LicenseService
         $user->loadMissing('client.applications');
 
         $applications = $user->client?->applications()
-            ->withPivot(['application_package_id', 'devices_max', 'status', 'purchased_at', 'expires_at'])
+            ->withPivot(['application_package_id', 'devices_max', 'extra_device_slots', 'status', 'purchased_at', 'expires_at'])
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get() ?? collect();
 
+        $packageIds = $applications
+            ->pluck('pivot.application_package_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $packagesById = $packageIds->isEmpty()
+            ? collect()
+            : ApplicationPackage::query()->whereIn('id', $packageIds)->get()->keyBy('id');
+
+        $devicesByApplication = LicenseDevice::query()
+            ->where('user_id', $user->id)
+            ->whereIn('application_id', $applications->pluck('id'))
+            ->orderByDesc('activated_at')
+            ->get()
+            ->groupBy('application_id');
+
+        $reportArchive = app(ReportArchivePasswordService::class);
+
         return [
             'has_purchases' => $applications->isNotEmpty(),
             'applications' => $applications
-                ->map(function (Application $application) use ($user) {
-                    $package = $application->pivot->application_package_id
-                        ? ApplicationPackage::find($application->pivot->application_package_id)
-                        : null;
+                ->map(function (Application $application) use ($user, $packagesById, $devicesByApplication, $reportArchive) {
+                    $packageId = (int) ($application->pivot->application_package_id ?? 0);
+                    $package = $packageId > 0 ? $packagesById->get($packageId) : null;
 
                     $expiresAt = $this->parsePivotDate($application->pivot->expires_at);
                     $purchaseStatus = (string) ($application->pivot->status ?? '');
                     $isExpired = ($expiresAt && now()->greaterThan($expiresAt))
                         || $purchaseStatus === 'expired';
 
-                    $license = $this->listDevicesPublic($user, '', $application->slug);
-                    if (($license['status'] ?? '') === 'error') {
-                        $license = $this->devicesSnapshotForApplication($user, $application);
+                    if ($isExpired) {
+                        $this->deviceSlots->finalizeExpiredLicense($user, $application);
+                        $user->loadMissing('client.applications');
                     }
+
+                    $owned = $user->client?->applications->firstWhere('id', $application->id);
+                    $devices = $devicesByApplication->get($application->id, collect());
+                    $license = $this->devicesSnapshotFromDevices($user, $application, $owned?->pivot, $devices);
+                    $isHighestTier = $this->isHighestPaidPackageTier($application, $package);
 
                     return [
                         'id' => $application->id,
@@ -402,18 +482,26 @@ class LicenseService
                         'purchase_status' => $purchaseStatus,
                         'license_status' => $isExpired ? 'expired' : $purchaseStatus,
                         'is_expired' => $isExpired,
+                        'is_highest_tier' => $isHighestTier,
                         'purchased_at' => $application->pivot->purchased_at,
                         'expires_at' => $application->pivot->expires_at,
                         'package' => $package ? [
                             'id' => $package->id,
                             'name' => $package->name,
+                            'sort_order' => (int) $package->sort_order,
                             'devices_quota' => (int) $package->devices_quota,
                             'duration_days' => (int) $package->duration_days,
                             'price' => (float) $package->price,
+                            'discount_percent' => (float) $package->discount_percent,
                         ] : null,
                         'devices_active' => $license['devices_active'] ?? 0,
                         'devices_max' => $license['devices_max'] ?? $application->default_devices_max,
+                        'devices_quota_base' => (int) ($package?->devices_quota ?? $owned?->pivot->devices_max ?? 0),
+                        'extra_device_slots' => (int) ($owned?->pivot->extra_device_slots ?? 0),
+                        'max_extra_device_slots' => (int) ($package?->max_extra_device_slots ?? 0),
+                        'device_slot_price' => (float) ($package?->device_slot_price ?? 0),
                         'devices' => $license['devices'] ?? [],
+                        'report_archive_configured' => $reportArchive->isConfiguredForApplication($user, (string) $application->slug),
                     ];
                 })
                 ->values()
@@ -421,8 +509,12 @@ class LicenseService
         ];
     }
 
-    private function resolveLicenseContext(User $user, string $applicationSlug, bool $requirePurchase = true): array
-    {
+    private function resolveLicenseContext(
+        User $user,
+        string $applicationSlug,
+        bool $requirePurchase = true,
+        bool $rejectExpired = true,
+    ): array {
         $user->loadMissing('client.applications');
 
         if (! $user->client) {
@@ -457,7 +549,14 @@ class LicenseService
             ];
         }
 
-        if ($owned && $owned->pivot->expires_at && now()->greaterThan($this->parsePivotDate($owned->pivot->expires_at))) {
+        if (
+            $rejectExpired
+            && $owned
+            && $owned->pivot->expires_at
+            && now()->greaterThan($this->parsePivotDate($owned->pivot->expires_at))
+        ) {
+            $this->deviceSlots->finalizeExpiredLicense($user, $application);
+
             return [
                 'status' => 'error',
                 'message' => 'Lisensi aplikasi telah kedaluwarsa',
@@ -486,6 +585,17 @@ class LicenseService
 
     private function devicesMaxFor(User $user, Application $application, $pivot = null): int
     {
+        $package = null;
+        if ($pivot?->application_package_id) {
+            $package = ApplicationPackage::find($pivot->application_package_id);
+        }
+
+        if ($package) {
+            $extra = (int) ($pivot->extra_device_slots ?? 0);
+
+            return $this->deviceSlots->effectiveDevicesMax($package, $extra);
+        }
+
         if ($pivot?->devices_max) {
             return (int) $pivot->devices_max;
         }
@@ -540,15 +650,23 @@ class LicenseService
         $allPackages = $this->orderedPackages($application);
 
         $currentRank = $this->packageRank($allPackages, $package);
-        $topRank = max(0, $allPackages->count() - 1);
-        $isHighestTier = $package !== null && $currentRank >= $topRank;
+        $isHighestTier = $this->isHighestPaidPackageTier($application, $package);
 
-        $upgradePackages = $allPackages
-            ->values()
-            ->filter(fn (ApplicationPackage $candidate, int $index) => $index > $currentRank)
-            ->map(fn (ApplicationPackage $candidate) => $this->packagePayload($candidate))
-            ->values()
-            ->all();
+        if ($isExpired) {
+            $upgradePackages = $allPackages
+                ->values()
+                ->filter(fn (ApplicationPackage $candidate) => ! $candidate->is_trial && (float) $candidate->price > 0)
+                ->map(fn (ApplicationPackage $candidate) => $this->packagePayload($candidate))
+                ->values()
+                ->all();
+        } else {
+            $upgradePackages = $allPackages
+                ->values()
+                ->filter(fn (ApplicationPackage $candidate, int $index) => $index > $currentRank)
+                ->map(fn (ApplicationPackage $candidate) => $this->packagePayload($candidate))
+                ->values()
+                ->all();
+        }
 
         $purchaseStatus = (string) ($owned->pivot->status ?? '');
         $licenseType = $package?->name;
@@ -580,6 +698,8 @@ class LicenseService
             'duration_days' => (int) $package->duration_days,
             'price' => (float) $package->price,
             'discount_percent' => (float) $package->discount_percent,
+            'max_extra_device_slots' => (int) $package->max_extra_device_slots,
+            'device_slot_price' => (float) $package->device_slot_price,
             'sort_order' => (int) $package->sort_order,
             'features' => $this->featuresForPackage($package),
         ];
@@ -641,6 +761,58 @@ class LicenseService
         ];
     }
 
+    /**
+     * @return array{show: bool, image_url: string|null}
+     */
+    public function startupNotificationPayload(Application $application, User $user): array
+    {
+        $empty = ['show' => false, 'image_url' => null];
+
+        if (! $application->notification_enabled) {
+            return $empty;
+        }
+
+        $imagePath = trim((string) ($application->notification_image_url ?? ''));
+        if ($imagePath === '') {
+            return $empty;
+        }
+
+        $user->loadMissing('client.applications');
+        $owned = $user->client?->applications->firstWhere('id', $application->id);
+        if (! $owned) {
+            return $empty;
+        }
+
+        $licenseInfo = $this->licenseInfoPayload($user, $application);
+        if (! empty($licenseInfo['is_expired'])) {
+            return $empty;
+        }
+
+        $purchaseStatus = strtolower((string) ($licenseInfo['purchase_status'] ?? ''));
+        if (! in_array($purchaseStatus, ['active', 'trial'], true)) {
+            return $empty;
+        }
+
+        $packageId = (int) ($owned->pivot->application_package_id ?? 0);
+        $allowed = collect($application->notification_package_ids ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values();
+
+        if ($allowed->isEmpty() || ! $allowed->contains($packageId)) {
+            return $empty;
+        }
+
+        $imageUrl = str_starts_with($imagePath, 'http://') || str_starts_with($imagePath, 'https://')
+            ? $imagePath
+            : url($imagePath);
+
+        return [
+            'show' => true,
+            'image_url' => $imageUrl,
+        ];
+    }
+
     private function formatRemainingLabel(Carbon $expiresAt, Carbon $now): string
     {
         $seconds = max(0, $now->diffInSeconds($expiresAt));
@@ -676,6 +848,25 @@ class LicenseService
         return -1;
     }
 
+    private function isHighestPaidPackageTier(Application $application, ?ApplicationPackage $package): bool
+    {
+        if (! $package || $package->is_trial || (float) $package->price <= 0) {
+            return false;
+        }
+
+        $paidPackages = $this->orderedPackages($application)
+            ->filter(fn (ApplicationPackage $candidate) => ! $candidate->is_trial && (float) $candidate->price > 0)
+            ->values();
+
+        if ($paidPackages->isEmpty()) {
+            return false;
+        }
+
+        $topPackage = $paidPackages->last();
+
+        return (int) $topPackage->id === (int) $package->id;
+    }
+
     private function parsePivotDate(mixed $value): ?Carbon
     {
         if ($value instanceof Carbon) {
@@ -702,9 +893,22 @@ class LicenseService
 
         $owned = $user->client?->applications->firstWhere('id', $application->id);
 
+        return $this->devicesSnapshotFromDevices($user, $application, $owned?->pivot, $devices);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, LicenseDevice>  $devices
+     * @return array{devices_active: int, devices_max: int, devices: array<int, array<string, mixed>>}
+     */
+    private function devicesSnapshotFromDevices(
+        User $user,
+        Application $application,
+        mixed $pivot,
+        $devices,
+    ): array {
         return [
             'devices_active' => $devices->count(),
-            'devices_max' => $this->devicesMaxFor($user, $application, $owned?->pivot),
+            'devices_max' => $this->devicesMaxFor($user, $application, $pivot),
             'devices' => $devices
                 ->map(fn (LicenseDevice $device) => $this->publicDevicePayload($device, '', $application))
                 ->values()

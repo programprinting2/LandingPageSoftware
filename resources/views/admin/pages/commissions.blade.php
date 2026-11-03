@@ -13,6 +13,7 @@
           <thead>
             <tr>
               <th>Affiliate</th>
+              <th>Kode voucher</th>
               <th>Client</th>
               <th>Paket</th>
               <th>Komisi</th>
@@ -22,7 +23,7 @@
             </tr>
           </thead>
           <tbody id="adminCommissionsTableBody">
-            <tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:24px;">Memuat data...</td></tr>
+            <tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">Memuat data...</td></tr>
           </tbody>
         </table>
       </div>

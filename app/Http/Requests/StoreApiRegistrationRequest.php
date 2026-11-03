@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesWhatsappInput;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -9,6 +10,8 @@ use Illuminate\Validation\Rules\Password;
 
 class StoreApiRegistrationRequest extends FormRequest
 {
+    use NormalizesWhatsappInput;
+
     public function authorize(): bool
     {
         return true;
@@ -21,7 +24,7 @@ class StoreApiRegistrationRequest extends FormRequest
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', Password::min(8)],
             'company_name' => ['nullable', 'string', 'max:255'],
-            'whatsapp' => ['nullable', 'string', 'max:20', 'regex:/^08[0-9]{8,13}$/'],
+            'whatsapp' => ['nullable', 'string', 'max:20'],
         ];
     }
 
@@ -33,7 +36,6 @@ class StoreApiRegistrationRequest extends FormRequest
             'email.unique' => 'Email sudah terdaftar.',
             'password.required' => 'Password wajib diisi.',
             'password.min' => 'Password minimal 8 karakter.',
-            'whatsapp.regex' => 'Nomor WhatsApp harus dimulai 08 dan 10-15 digit.',
         ];
     }
 

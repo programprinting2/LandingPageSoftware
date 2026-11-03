@@ -2,11 +2,13 @@
 
 @push('styles')
     <link rel="stylesheet" href="{{ asset('css/landing.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/client-commerce-modals.css') }}">
 @endpush
 
 @section('content')
     @include('landing.index')
     @include('shared.components.auth-modal')
+    @include('shared.components.client-license-device-slots-modal')
     @include('shared.components.checkout-modal')
     @include('shared.components.app-dialog')
     @if(!empty($liveEdit))

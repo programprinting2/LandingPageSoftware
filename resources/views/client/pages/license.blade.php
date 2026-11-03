@@ -5,7 +5,7 @@
           <h1>Lisensi Saya</h1>
           <p>Ringkasan paket yang dibeli per aplikasi, masa berlaku, dan perangkat yang teraktivasi.</p>
         </div>
-        <button type="button" class="btn btn-secondary client-license-reload" onclick="loadClientLicense()">Muat ulang</button>
+        <button type="button" class="btn btn-secondary client-license-reload" onclick="loadClientLicense({ force: true })">Muat ulang</button>
       </div>
 
       <div id="clientLicenseApps" class="client-license-apps" aria-live="polite">

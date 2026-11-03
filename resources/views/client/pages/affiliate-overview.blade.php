@@ -7,14 +7,25 @@
         <p id="clientAffiliateEnrollError" class="admin-app-label-hint" style="margin-top:12px;color:var(--rose);" hidden></p>
       </div>
       <div id="clientAffiliateDashboard">
-      <div class="ref-link-card">
-        <div style="font-size:13px;color:var(--text-2);">Link Referral Anda</div>
-        <div class="ref-link-bar">
-          <div class="ref-link-text" id="clientRefLinkText">—</div>
-          <button type="button" class="btn btn-primary" style="padding:10px 18px;" onclick="copyClientRefLink()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span id="clientCopyBtnText">Salin</span>
-          </button>
+      <div class="client-affiliate-ref-row">
+        <div class="ref-link-card client-affiliate-ref-cell">
+          <div class="client-affiliate-ref-label">Link Referral Anda</div>
+          <div class="ref-link-bar">
+            <div class="ref-link-text" id="clientRefLinkText">—</div>
+            <button type="button" class="btn btn-primary ref-link-bar-btn" onclick="copyClientRefLink()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span id="clientCopyBtnText">Salin</span>
+            </button>
+          </div>
+          <div class="client-affiliate-code-status client-affiliate-code-status--spacer" aria-hidden="true"></div>
+        </div>
+        <div class="ref-link-card client-affiliate-ref-cell">
+          <div class="client-affiliate-ref-label">Kode referral / voucher</div>
+          <div class="ref-link-bar">
+            <input class="admin-app-input client-affiliate-code-input" id="clientAffiliateCodeInput" type="text" maxlength="6" autocomplete="off" spellcheck="false" placeholder="Kode" title="Kode referral / voucher">
+            <button type="button" class="btn btn-primary ref-link-bar-btn" id="clientAffiliateCodeSaveBtn" onclick="saveClientAffiliateCode()">Simpan</button>
+          </div>
+          <p id="clientAffiliateCodeStatus" class="client-affiliate-code-status" role="status" aria-live="polite"></p>
         </div>
       </div>
       <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);">
@@ -27,7 +38,7 @@
           <h3>Daftar Referral</h3>
           <span id="clientAffiliateTableMeta" class="admin-app-label-hint"></span>
         </div>
-        <table class="dash-table"><thead><tr><th>Client</th><th>Email</th><th>Aplikasi</th><th>Paket</th><th>Nilai</th><th>Komisi</th><th>Tanggal</th><th>Status</th></tr></thead><tbody id="clientAffiliateReferralsBody">
+        <table class="dash-table"><thead><tr><th>Client</th><th>Deskripsi</th><th>Nilai</th><th>Komisi</th><th>Tanggal</th><th>Status</th></tr></thead><tbody id="clientAffiliateReferralsBody">
         <tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">Memuat…</td></tr>
       </tbody></table>
         <div id="clientAffiliatePagination" class="dash-pagination" hidden></div>

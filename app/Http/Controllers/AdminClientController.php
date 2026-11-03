@@ -46,7 +46,7 @@ class AdminClientController extends Controller
             $client = Client::create([
                 'user_id' => $user->id,
                 'company_name' => $validated['company_name'] ?? $validated['name'],
-                'whatsapp' => $validated['whatsapp'],
+                'whatsapp' => $validated['whatsapp'] ?? '',
                 'status' => $validated['status'],
                 'devices_max' => config('spotcolor.devices_max', 3),
             ]);
@@ -85,7 +85,7 @@ class AdminClientController extends Controller
 
             $client->update([
                 'company_name' => $validated['company_name'] ?? $validated['name'],
-                'whatsapp' => $validated['whatsapp'],
+                'whatsapp' => $validated['whatsapp'] ?? '',
                 'status' => $validated['status'],
             ]);
 

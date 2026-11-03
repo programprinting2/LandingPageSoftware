@@ -7,6 +7,7 @@ use App\Models\Application;
 use App\Models\ApplicationPackage;
 use App\Models\Client;
 use App\Models\User;
+use App\Support\WhatsappNumber;
 use App\Services\AffiliateService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -30,7 +31,7 @@ class ClientAuthService
             $client = Client::create([
                 'user_id' => $user->id,
                 'company_name' => trim((string) ($data['company_name'] ?? '')) ?: $user->name,
-                'whatsapp' => $data['whatsapp'],
+                'whatsapp' => WhatsappNumber::normalize($data['whatsapp'] ?? null) ?? '',
                 'status' => 'active',
                 'devices_max' => config('spotcolor.devices_max', 3),
             ]);
@@ -283,6 +284,45 @@ class ClientAuthService
         ApiToken::where('token', hash('sha256', $plainToken))->delete();
     }
 
+    /**
+     * @return array{status: string, message?: string, client?: array, errors?: array}
+     */
+    public function updateClientProfile(User $user, array $data): array
+    {
+        $user->loadMissing('client');
+
+        if (! $user->client) {
+            return [
+                'status' => 'error',
+                'message' => 'Profil client tidak ditemukan.',
+            ];
+        }
+
+        if (! $this->canAccessClientPortal($user)) {
+            return [
+                'status' => 'error',
+                'message' => 'Akun tidak aktif.',
+            ];
+        }
+
+        $name = trim((string) ($data['name'] ?? ''));
+        $whatsapp = WhatsappNumber::normalize($data['whatsapp'] ?? null) ?? '';
+
+        $user->name = $name;
+        $user->save();
+
+        $user->client->update([
+            'whatsapp' => $whatsapp,
+            'company_name' => $name,
+        ]);
+
+        return [
+            'status' => 'success',
+            'message' => 'Profil berhasil disimpan.',
+            'client' => $this->clientPayload($user->fresh(['client', 'affiliate'])),
+        ];
+    }
+
     public function clientPayload(User $user): array
     {
         $user->loadMissing(['client', 'affiliate']);
@@ -296,6 +336,7 @@ class ClientAuthService
             'whatsapp' => $user->client?->whatsapp ?? '',
             'affiliate' => $affiliateSummary,
             'can_enroll_affiliate' => ! $affiliateSummary || ! ($affiliateSummary['active'] ?? false),
+            'report_archive_configured' => app(ReportArchivePasswordService::class)->isConfiguredForAnyApplication($user),
         ];
     }
 

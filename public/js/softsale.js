@@ -19,8 +19,10 @@
   clientMeUrl = '/api/client/me',
   clientAffiliateUrl = '/api/client/affiliate',
   clientAffiliateEnrollUrl = '/api/client/affiliate/enroll',
+  clientAffiliateCodeUrl = '/api/client/affiliate/code',
   clientLicenseUrl = '/api/client/license',
   clientCheckoutUrl = '/api/client/checkout',
+  clientDeviceSlotsCheckoutUrl = '/api/client/checkout/device-slots',
   clientCommercePlansUrl = '/api/client/commerce/plans',
   clientTrialActivateUrl = '/api/client/trial/activate',
   clientCheckoutStatusUrl = '/api/client/checkout',
@@ -29,6 +31,7 @@
   clientTransactionsUrl = '/api/client/transactions',
   adminClientsUrl = '/api/admin/clients',
   adminAffiliatesUrl = '/api/admin/affiliates',
+  adminPromoVouchersUrl = '/api/admin/promo-vouchers',
   adminCommissionsUrl = '/api/admin/commissions',
   adminApplicationsUrl = '/api/admin/applications',
   adminApplicationLogoUploadUrl = '/api/admin/applications/upload-logo',
@@ -44,6 +47,7 @@
   application: landingApplication = null,
   initialClient: bootInitialClient = null,
   initialClientLicense: bootInitialClientLicense = null,
+  initialAdmin: bootInitialAdmin = null,
   googleAuthRedirectUrl = '/auth/google/redirect',
   googleLoginEnabled = false,
   postOAuthIntent: bootPostOAuthIntent = null,
@@ -58,29 +62,52 @@ const DEMO_PORTAL_KEY = 'softsale_demo_portal';
 const LANDING_PENDING_CHECKOUT_KEY = 'softsale_pending_checkout_package';
 const LANDING_INTENT_KEY = 'softsale_landing_intent';
 const LANDING_REFERRAL_KEY = 'softsale_referral_code';
+const LANDING_APPLIED_REFERRAL_KEY = 'softsale_applied_referral_code';
 let landingCheckoutPollTimer = null;
 let landingActiveCheckoutOrderId = null;
 let adminClientsCache = [];
 let adminUsersCache = [];
 let adminSession = null;
 let adminAffiliatesCache = [];
+let adminPromoVouchersCache = [];
+let adminAffiliateTrxModalId = null;
+let adminAffiliateTrxPage = 1;
+let adminAffiliateTrxStatus = 'all';
+let adminPromoVoucherUsagesModalId = null;
+let adminPromoVoucherUsagesPage = 1;
+let adminPromoVoucherUsagesStatus = 'all';
 let adminCommissionsCache = [];
 let clientSession = null;
 let adminClientModalMode = 'client';
 let adminClientUserRoleOriginal = '';
 let clientBillingPendingCache = [];
+let clientLicenseAppsCache = [];
+let clientLicenseCommerceDialogMode = 'upgrade';
+let clientLicenseSnapshot = bootInitialClientLicense || null;
+const clientCommercePlansCache = new Map();
+let clientLicenseLastCommercePlans = [];
+let clientLicenseDeviceSlotsContext = null;
+let clientLicenseAppliedVoucher = null;
+let clientLicenseCheckoutReferralCode = '';
+let clientLicenseReferralValidateSeq = 0;
 let landingCommercePlansPromise = null;
 let clientAffiliatePage = 1;
-const CLIENT_AFFILIATE_PER_PAGE = 10;
+const CLIENT_AFFILIATE_PER_PAGE = 20;
+const ADMIN_TRX_DETAIL_PER_PAGE = 20;
 let adminLicensesApplicationFilter = '';
 let adminLicensesSearchQuery = '';
 let adminLicensesSearchTimer = null;
 let adminApplicationsCache = [];
 let adminLicensesCache = [];
+let adminLicensePackageEditId = null;
 let adminTransactionsCache = [];
 let adminPaymentOrdersCache = [];
 let adminPaymentOrdersSearchTimer = null;
 let adminTransactionsActiveTab = 'ledger';
+let adminTransactionsLedgerPage = 1;
+let adminTransactionsLedgerStatus = 'all';
+let adminPaymentOrdersPage = 1;
+let adminPaymentOrdersStatus = 'all';
 let adminSettingsActiveTab = 'email';
 let adminLandingCmsCache = {};
 let adminLandingCmsApplicationId = null;
@@ -94,6 +121,126 @@ function svgIcon(paths, size = 20, color = 'currentColor') {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
 }
 const checkSVG = svgIcon('<path d="M20 6L9 17l-5-5"/>', 15, 'var(--green)');
+const gearSVG = svgIcon(
+  '<path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  18,
+);
+
+let dashActionGearListenersBound = false;
+
+function resetDashActionGearMenuPosition(menu) {
+  if (!menu) return;
+  menu.classList.remove('dash-action-gear-menu--fixed', 'dash-action-gear-menu--drop-up');
+  menu.style.position = '';
+  menu.style.top = '';
+  menu.style.left = '';
+  menu.style.right = '';
+  menu.style.bottom = '';
+  menu.style.zIndex = '';
+  menu.style.visibility = '';
+  menu.style.display = '';
+}
+
+function positionDashActionGearMenu(menu, wrap) {
+  const trigger = wrap?.querySelector('.dash-action-gear-trigger');
+  if (!menu || !trigger) return;
+
+  resetDashActionGearMenuPosition(menu);
+  menu.style.visibility = 'hidden';
+  menu.style.display = 'flex';
+
+  const menuRect = menu.getBoundingClientRect();
+  const triggerRect = trigger.getBoundingClientRect();
+  const gap = 6;
+  const pad = 8;
+  const menuH = menuRect.height || 120;
+  const menuW = menuRect.width || 188;
+
+  let top = triggerRect.bottom + gap;
+  if (top + menuH > window.innerHeight - pad && triggerRect.top - gap - menuH >= pad) {
+    top = triggerRect.top - gap - menuH;
+  } else if (top + menuH > window.innerHeight - pad) {
+    top = Math.max(pad, window.innerHeight - pad - menuH);
+  }
+
+  let left = triggerRect.right - menuW;
+  if (left < pad) left = pad;
+  if (left + menuW > window.innerWidth - pad) {
+    left = Math.max(pad, window.innerWidth - pad - menuW);
+  }
+
+  menu.classList.add('dash-action-gear-menu--fixed');
+  menu.style.position = 'fixed';
+  menu.style.top = `${Math.round(top)}px`;
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.right = 'auto';
+  menu.style.bottom = 'auto';
+  menu.style.zIndex = '12000';
+  menu.style.visibility = '';
+}
+
+function closeAllDashActionGearMenus() {
+  document.querySelectorAll('.dash-action-gear-menu').forEach((menu) => {
+    resetDashActionGearMenuPosition(menu);
+    menu.classList.remove('is-open');
+    menu.hidden = true;
+  });
+  document.querySelectorAll('.dash-action-gear-trigger[aria-expanded="true"]').forEach((btn) => {
+    btn.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function ensureDashActionGearListeners() {
+  if (dashActionGearListenersBound) return;
+  dashActionGearListenersBound = true;
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('.dash-action-gear-menu-item')) {
+      closeAllDashActionGearMenus();
+      return;
+    }
+    if (!event.target.closest('.dash-action-gear-wrap')) {
+      closeAllDashActionGearMenus();
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeAllDashActionGearMenus();
+  });
+}
+
+function toggleDashActionGearMenu(event, menuId) {
+  event?.stopPropagation();
+  event?.preventDefault();
+  ensureDashActionGearListeners();
+  const menu = document.getElementById(menuId);
+  if (!menu) return;
+  const wrap = menu.closest('.dash-action-gear-wrap');
+  const trigger = wrap?.querySelector('.dash-action-gear-trigger');
+  const willOpen = !menu.classList.contains('is-open');
+  closeAllDashActionGearMenus();
+  if (willOpen) {
+    menu.classList.add('is-open');
+    menu.hidden = false;
+    trigger?.setAttribute('aria-expanded', 'true');
+    requestAnimationFrame(() => positionDashActionGearMenu(menu, wrap));
+  }
+}
+
+function renderDashActionGearMenu(menuId, itemHtml, options = {}) {
+  const items = (itemHtml || '').trim();
+  if (!items) return '';
+  const showLabel = options.showLabel === true;
+  const labelText = String(options.labelText || 'Aksi');
+  const triggerClass = showLabel
+    ? 'btn btn-secondary dash-action-gear-trigger dash-action-gear-trigger--labeled'
+    : 'btn btn-secondary dash-action-gear-trigger';
+  const triggerInner = showLabel
+    ? `<span class="dash-action-gear-trigger-label">${escapeHtml(labelText)}</span>${gearSVG}`
+    : gearSVG;
+  return `<div class="dash-action-gear-wrap${showLabel ? ' dash-action-gear-wrap--labeled' : ''}">
+    <button type="button" class="${triggerClass}" aria-label="${escapeHtml(labelText)}" aria-haspopup="true" aria-expanded="false" onclick="toggleDashActionGearMenu(event, '${menuId}')">${triggerInner}</button>
+    <div class="dash-action-gear-menu" id="${menuId}" hidden role="menu">${items}</div>
+  </div>`;
+}
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // RENDER SECTIONS
@@ -139,6 +286,336 @@ function landingReferralCode() {
   } catch {
     return '';
   }
+}
+
+function normalizeClientReferralCode(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+}
+
+const AFFILIATE_REFERRAL_CODE_PATTERN = /^[A-Z0-9]{6}$/;
+const AFFILIATE_REFERRAL_CODE_RESERVED = new Set([
+  'ADMIN', 'ADMINS', 'SYSTEM', 'SYSTMS', 'ROOT', 'SUPER', 'MASTER',
+  'MODER', 'STAFF', 'SUPPORT', 'HELP', 'PUBLIC', 'PRIVATE',
+  'NULL', 'VOID', 'EMPTY', 'TEST', 'DEBUG', 'DEMO', 'SAMPLE',
+  'DELETE', 'REMOVE', 'UPDATE', 'INSERT', 'SELECT', 'DROP', 'TABLE',
+  'TOKEN', 'SECRET', 'APIKEY', 'PASSWD', 'LOGIN', 'LOGOUT',
+  'VOUCHER', 'PROMO', 'DISKON', 'KODE', 'REFERR', 'AFFIL', 'AFFILI',
+  'OWNER', 'GODMOD', 'BYPASS', 'ENABLE', 'DISABLE', 'SPOTCO', 'QUICKS',
+]);
+
+function isAffiliateReferralCodeReserved(code) {
+  if (!code || AFFILIATE_REFERRAL_CODE_RESERVED.has(code)) return true;
+  for (const word of AFFILIATE_REFERRAL_CODE_RESERVED) {
+    if (word.length <= 6 && code.startsWith(word)) return true;
+  }
+  return false;
+}
+
+function isValidAffiliateReferralCodeFormat(code) {
+  return affiliateReferralCodeValidationMessage(code) === null;
+}
+
+/** @returns {string|null} pesan error, atau null jika format + blocklist OK */
+function affiliateReferralCodeValidationMessage(code) {
+  const normalized = normalizeClientReferralCode(code);
+  if (!normalized) {
+    return 'Kode wajib diisi.';
+  }
+  if (normalized.length !== 6 || !AFFILIATE_REFERRAL_CODE_PATTERN.test(normalized)) {
+    return 'Kode harus 6 karakter huruf A–Z dan angka 0–9.';
+  }
+  if (isAffiliateReferralCodeReserved(normalized)) {
+    return 'Kode tidak dapat digunakan. Pilih kode lain.';
+  }
+  return null;
+}
+
+function clientCheckoutReferralCode() {
+  const fromApplied = clientLicenseAppliedVoucher?.code || clientLicenseCheckoutReferralCode;
+  if (fromApplied) {
+    return normalizeClientReferralCode(fromApplied);
+  }
+  try {
+    return normalizeClientReferralCode(sessionStorage.getItem(LANDING_APPLIED_REFERRAL_KEY) || '');
+  } catch {
+    return '';
+  }
+}
+
+function setClientLicenseCheckoutReferralCode(code) {
+  const normalized = normalizeClientReferralCode(code);
+  clientLicenseCheckoutReferralCode = normalized;
+  try {
+    if (normalized) {
+      sessionStorage.setItem(LANDING_APPLIED_REFERRAL_KEY, normalized);
+      sessionStorage.setItem(LANDING_REFERRAL_KEY, normalized);
+    } else {
+      sessionStorage.removeItem(LANDING_APPLIED_REFERRAL_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function clearClientLicenseCheckoutReferralCode() {
+  clientLicenseCheckoutReferralCode = '';
+  try {
+    sessionStorage.removeItem(LANDING_APPLIED_REFERRAL_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function primeClientCheckoutReferralFields() {
+  const stored = normalizeClientReferralCode(landingReferralCode());
+  if (!stored) return;
+  const el = document.getElementById('clientLicenseDeviceSlotsReferral');
+  if (el && !normalizeClientReferralCode(el.value)) {
+    el.value = stored;
+  }
+}
+
+function persistClientCheckoutReferralCode() {
+  const code = clientCheckoutReferralCode();
+  try {
+    if (code) {
+      sessionStorage.setItem(LANDING_REFERRAL_KEY, code);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function syncClientCheckoutReferralAcrossFields() {
+  const deviceEl = document.getElementById('clientLicenseDeviceSlotsReferral');
+  const v = normalizeClientReferralCode(deviceEl?.value || landingReferralCode());
+  if (!v || !deviceEl) return;
+  if (!normalizeClientReferralCode(deviceEl.value)) {
+    deviceEl.value = v;
+  }
+}
+
+function resetClientLicenseVoucherUi(clearCheckoutReferral = false) {
+  clientLicenseAppliedVoucher = null;
+  const input = document.getElementById('clientLicenseDeviceSlotsReferral');
+  if (input) {
+    input.classList.remove('is-valid', 'is-invalid');
+  }
+  const statusEl = document.getElementById('clientLicenseDeviceSlotsReferralStatus');
+  if (statusEl) {
+    statusEl.textContent = '';
+    statusEl.className = 'client-license-device-slots-referral-status';
+  }
+  if (clearCheckoutReferral) {
+    clearClientLicenseCheckoutReferralCode();
+  }
+}
+
+function clearClientLicenseReferralStatus() {
+  const statusEl = document.getElementById('clientLicenseDeviceSlotsReferralStatus');
+  if (statusEl) {
+    statusEl.textContent = '';
+    statusEl.className = 'client-license-device-slots-referral-status';
+  }
+  const input = document.getElementById('clientLicenseDeviceSlotsReferral');
+  if (input) {
+    input.classList.remove('is-valid', 'is-invalid');
+  }
+}
+
+function setClientLicenseReferralInputVisual(state) {
+  const input = document.getElementById('clientLicenseDeviceSlotsReferral');
+  if (!input) return;
+  input.classList.remove('is-valid', 'is-invalid');
+  if (state === 'valid') input.classList.add('is-valid');
+  if (state === 'invalid') input.classList.add('is-invalid');
+}
+
+function clientLicenseAppPackageDiscountPercent(app) {
+  const fromPkg = Number(app?.package?.discount_percent ?? NaN);
+  if (!Number.isNaN(fromPkg)) {
+    return Math.max(0, Math.min(100, fromPkg));
+  }
+  const pkgId = Number(app?.package?.id ?? 0);
+  if (pkgId > 0) {
+    const plan = (clientLicenseLastCommercePlans || []).find((p) => Number(p.package_id) === pkgId);
+    return Math.max(0, Math.min(100, Number(plan?.discount_percent ?? 0)));
+  }
+  return 0;
+}
+
+function clientLicenseVoucherIsAppliedForUi() {
+  if (clientLicenseAppliedVoucher?.code) {
+    return true;
+  }
+  const input = normalizeClientReferralCode(
+    document.getElementById('clientLicenseDeviceSlotsReferral')?.value,
+  );
+  const locked = normalizeClientReferralCode(clientLicenseCheckoutReferralCode);
+  return !!(input && locked && input === locked);
+}
+
+function clientLicenseReferralApplicationSlug() {
+  const ctx = clientLicenseDeviceSlotsContext;
+  if (ctx?.applicationSlug) return ctx.applicationSlug;
+  if (ctx?.app?.slug) return ctx.app.slug;
+  if (landingApplication?.slug) return landingApplication.slug;
+  return 'spot-color';
+}
+
+function clientLicenseVoucherDiscountPercent(ctx) {
+  if (!clientLicenseVoucherIsAppliedForUi() || !ctx) return 0;
+  if (clientLicenseAppliedVoucher?.discountPercent != null && !Number.isNaN(Number(clientLicenseAppliedVoucher.discountPercent))) {
+    return Math.max(0, Math.min(100, Number(clientLicenseAppliedVoucher.discountPercent)));
+  }
+  if (typeof ctx.voucherDiscountPercent === 'number' && !Number.isNaN(ctx.voucherDiscountPercent)) {
+    return Math.max(0, Math.min(100, ctx.voucherDiscountPercent));
+  }
+  if (ctx.mode === 'add') {
+    return clientLicenseAppPackageDiscountPercent(ctx.app);
+  }
+  return Math.max(0, Math.min(100, Number(ctx.plan?.discount_percent ?? 0)));
+}
+
+function computeCheckoutVoucherTotals(subtotal, discountPercent) {
+  const listPrice = Math.max(0, Number(subtotal || 0));
+  const pct = clientLicenseVoucherIsAppliedForUi() && discountPercent > 0 ? discountPercent : 0;
+  const discountAmount = pct > 0 ? Math.round(listPrice * (pct / 100)) : 0;
+  const finalTotal = Math.max(0, listPrice - discountAmount);
+  return { listPrice, discountPercent: pct, discountAmount, finalTotal };
+}
+
+function formatCheckoutDiscountPercent(num) {
+  const n = Number(num);
+  if (Number.isNaN(n) || n === 0) return '0%';
+  const rounded = Math.round(n * 100) / 100;
+  const label = Number.isInteger(rounded) ? String(rounded) : String(rounded);
+  return `${label}%`;
+}
+
+function onClientLicenseReferralInput() {
+  const input = document.getElementById('clientLicenseDeviceSlotsReferral');
+  if (!input) return;
+  const code = normalizeClientReferralCode(input.value);
+  if (input.value !== code) input.value = code;
+  if (clientLicenseAppliedVoucher && clientLicenseAppliedVoucher.code !== code) {
+    clientLicenseAppliedVoucher = null;
+    syncClientLicenseDeviceSlotsUi(false);
+  }
+  clearClientLicenseReferralStatus();
+}
+
+async function validateClientLicenseReferralCode(code) {
+  const statusEl = document.getElementById('clientLicenseDeviceSlotsReferralStatus');
+  if (!statusEl) return { valid: false, name: null };
+
+  if (!code) {
+    clearClientLicenseReferralStatus();
+    return { valid: false, name: null };
+  }
+
+  const formatMsg = affiliateReferralCodeValidationMessage(code);
+  if (formatMsg) {
+    statusEl.textContent = formatMsg;
+    statusEl.className = 'client-license-device-slots-referral-status is-invalid';
+    setClientLicenseReferralInputVisual('invalid');
+    return { valid: false, name: null };
+  }
+
+  statusEl.textContent = 'Memeriksa…';
+  statusEl.className = 'client-license-device-slots-referral-status is-checking';
+  setClientLicenseReferralInputVisual('');
+  const seq = ++clientLicenseReferralValidateSeq;
+
+  try {
+    const appSlug = encodeURIComponent(clientLicenseReferralApplicationSlug());
+    const response = await fetch(`/api/referral/${encodeURIComponent(code)}?application=${appSlug}`, {
+      headers: { Accept: 'application/json' },
+    });
+    const data = await response.json();
+    if (seq !== clientLicenseReferralValidateSeq) return { valid: false, name: null };
+    if (data.valid) {
+      statusEl.textContent = 'Kode voucher berhasil diterapkan.';
+      statusEl.className = 'client-license-device-slots-referral-status is-valid';
+      setClientLicenseReferralInputVisual('valid');
+      const discountPercent = data.type === 'promo' && data.discount_percent != null
+        ? Number(data.discount_percent)
+        : null;
+      return { valid: true, type: data.type || 'affiliate', discountPercent };
+    }
+    statusEl.textContent = 'Kode voucher tidak ditemukan.';
+    statusEl.className = 'client-license-device-slots-referral-status is-invalid';
+    setClientLicenseReferralInputVisual('invalid');
+    return { valid: false, name: null };
+  } catch {
+    if (seq !== clientLicenseReferralValidateSeq) return { valid: false, name: null };
+    statusEl.textContent = 'Gagal memeriksa kode. Coba lagi.';
+    statusEl.className = 'client-license-device-slots-referral-status is-invalid';
+    setClientLicenseReferralInputVisual('invalid');
+    return { valid: false, name: null };
+  }
+}
+
+async function applyClientLicenseDeviceSlotsReferral() {
+  const input = document.getElementById('clientLicenseDeviceSlotsReferral');
+  const applyBtn = document.getElementById('clientLicenseDeviceSlotsReferralApplyBtn');
+  const statusEl = document.getElementById('clientLicenseDeviceSlotsReferralStatus');
+  const code = normalizeClientReferralCode(input?.value);
+
+  if (!code) {
+    clientLicenseAppliedVoucher = null;
+    clearClientLicenseCheckoutReferralCode();
+    clearClientLicenseReferralStatus();
+    syncClientLicenseDeviceSlotsUi(false);
+    return;
+  }
+
+  if (
+    clientLicenseAppliedVoucher?.code === code
+    && normalizeClientReferralCode(clientLicenseCheckoutReferralCode) === code
+  ) {
+    if (statusEl) {
+      statusEl.textContent = 'Kode voucher berhasil diterapkan.';
+      statusEl.className = 'client-license-device-slots-referral-status is-valid';
+    }
+    setClientLicenseReferralInputVisual('valid');
+    syncClientLicenseDeviceSlotsUi(false);
+    return;
+  }
+
+  if (applyBtn) {
+    applyBtn.disabled = true;
+    applyBtn.textContent = '…';
+  }
+
+  const result = await validateClientLicenseReferralCode(code);
+
+  if (applyBtn) {
+    applyBtn.disabled = false;
+    applyBtn.textContent = 'Terapkan';
+  }
+
+  if (!result.valid) {
+    clientLicenseAppliedVoucher = null;
+    clearClientLicenseReferralStatus();
+    syncClientLicenseDeviceSlotsUi(false);
+    return;
+  }
+
+  clientLicenseAppliedVoucher = {
+    code,
+    type: result.type || 'affiliate',
+    discountPercent: result.discountPercent ?? null,
+  };
+  setClientLicenseCheckoutReferralCode(code);
+  syncClientLicenseDeviceSlotsUi(false);
+}
+
+function clientLicenseDeviceSlotsVoucherMismatch() {
+  const input = document.getElementById('clientLicenseDeviceSlotsReferral');
+  const code = normalizeClientReferralCode(input?.value);
+  if (!code) return false;
+  return !clientLicenseAppliedVoucher || clientLicenseAppliedVoucher.code !== code;
 }
 
 function landingPlanCtaAction(plan) {
@@ -389,7 +866,7 @@ function handleLandingPlanAction(plan) {
     return;
   }
   if (action === 'checkout' && packageId > 0) {
-    startClientCheckout(packageId);
+    promptClientCheckoutDevices(plan, packageId, landingApplicationSlug());
   }
 }
 
@@ -430,13 +907,19 @@ function closeCheckoutModal() {
     landingCheckoutPollTimer = null;
   }
   landingActiveCheckoutOrderId = null;
+  const simBtn = document.getElementById('checkoutSimulateBtn');
+  if (simBtn) {
+    simBtn.disabled = false;
+    simBtn.textContent = 'Simulasikan pembayaran (sandbox)';
+  }
   const modal = document.getElementById('checkoutModal');
   if (modal) {
     modal.classList.remove('open');
     modal.setAttribute('hidden', '');
     modal.setAttribute('aria-hidden', 'true');
   }
-  if (!document.getElementById('authModal')?.classList.contains('open')) {
+  if (!document.getElementById('authModal')?.classList.contains('open')
+    && !document.getElementById('clientLicensePackagesModal')?.classList.contains('open')) {
     document.body.style.overflow = '';
   }
 }
@@ -453,17 +936,77 @@ function openCheckoutModal() {
   document.getElementById('checkoutPaymentActions')?.removeAttribute('hidden');
 }
 
+function checkoutSummaryRow(label, value, className = '') {
+  const safeLabel = String(label || '');
+  const safeValue = String(value ?? '—');
+  const extraClass = className ? ` ${className}` : '';
+  return `<div class="checkout-summary-row${extraClass}"><span class="checkout-label">${safeLabel}</span><strong>${safeValue}</strong></div>`;
+}
+
+function buildCheckoutSummaryHtml(payment) {
+  const summary = payment?.summary || {};
+  const rows = [];
+  const orderType = summary.order_type || '';
+
+  if (payment?.application?.name) {
+    rows.push(checkoutSummaryRow('Aplikasi', payment.application.name));
+  }
+  if (summary.order_type_label) {
+    rows.push(checkoutSummaryRow('Transaksi', summary.order_type_label));
+  }
+  if (payment?.package?.name) {
+    rows.push(checkoutSummaryRow('Paket', payment.package.name));
+  }
+  if (summary.duration_days > 0 && orderType !== 'device_slots') {
+    rows.push(checkoutSummaryRow('Durasi lisensi', `${summary.duration_days} hari`));
+  }
+  if (orderType === 'device_slots' && summary.extra_device_slots > 0) {
+    rows.push(checkoutSummaryRow('Slot tambahan', `+${summary.extra_device_slots} perangkat`));
+  } else if (summary.total_devices > 0) {
+    const quota = Number(summary.devices_quota || 0);
+    const extra = Number(summary.extra_device_slots || 0);
+    let deviceText = `${summary.total_devices} perangkat`;
+    if (quota > 0 && extra > 0) {
+      deviceText = `${summary.total_devices} perangkat (${quota} dasar + ${extra} extra)`;
+    } else if (quota > 0) {
+      deviceText = `${quota} perangkat`;
+    }
+    rows.push(checkoutSummaryRow('Kuota perangkat', deviceText));
+  }
+  if (orderType !== 'device_slots' && summary.package_list_price > 0) {
+    rows.push(checkoutSummaryRow('Harga paket', summary.package_list_price_label || '—'));
+  }
+  if (summary.slot_line_amount > 0) {
+    rows.push(checkoutSummaryRow('Biaya slot perangkat', summary.slot_line_amount_label || '—'));
+  }
+  if (summary.list_price_label && (summary.discount_amount > 0 || summary.slot_line_amount > 0)) {
+    rows.push(checkoutSummaryRow('Subtotal', summary.list_price_label));
+  }
+  if (summary.discount_amount > 0 && summary.discount_amount_label) {
+    const pct = formatCheckoutDiscountPercent(summary.discount_percent);
+    rows.push(checkoutSummaryRow(`Potongan voucher (${pct})`, summary.discount_amount_label));
+  }
+  if (payment?.referral_code) {
+    rows.push(checkoutSummaryRow('Kode voucher', payment.referral_code));
+  }
+  rows.push(checkoutSummaryRow('Total bayar', payment?.amount_label || '—', 'checkout-summary-row-total'));
+  if (payment?.expires_at_label) {
+    rows.push(
+      checkoutSummaryRow('Bayar sebelum', payment.expires_at_label, 'checkout-summary-row-muted'),
+    );
+  }
+  return rows.join('');
+}
+
 function renderCheckoutPayment(payment, message) {
   openCheckoutModal();
   const subtitle = document.getElementById('checkoutModalSubtitle');
   if (subtitle) subtitle.textContent = message || 'Selesaikan pembayaran QRIS untuk mengaktifkan paket.';
 
-  const pkgName = document.getElementById('checkoutPackageName');
-  const amount = document.getElementById('checkoutAmountLabel');
-  const expires = document.getElementById('checkoutExpiresLabel');
-  if (pkgName) pkgName.textContent = payment?.package?.name || '—';
-  if (amount) amount.textContent = payment?.amount_label || '—';
-  if (expires) expires.textContent = payment?.expires_at_label || '—';
+  const summaryEl = document.getElementById('checkoutSummary');
+  if (summaryEl) {
+    summaryEl.innerHTML = buildCheckoutSummaryHtml(payment);
+  }
 
   const link = document.getElementById('checkoutPaymentLink');
   if (link) {
@@ -478,6 +1021,8 @@ function renderCheckoutPayment(payment, message) {
 
   const simBtn = document.getElementById('checkoutSimulateBtn');
   if (simBtn) {
+    simBtn.disabled = false;
+    simBtn.textContent = 'Simulasikan pembayaran (sandbox)';
     if (payment?.simulate_available) {
       simBtn.removeAttribute('hidden');
     } else {
@@ -515,6 +1060,12 @@ async function refreshClientCheckoutStatus(orderId, options = {}) {
       document.getElementById('checkoutPaymentActions')?.setAttribute('hidden', '');
       document.getElementById('checkoutPaidSuccess')?.removeAttribute('hidden');
       if (!quiet) showCheckoutAlert('Pembayaran berhasil.', 'success');
+      if (document.getElementById('clientLicenseApps')) {
+        loadClientLicense({ background: true, force: true });
+      }
+      if (document.getElementById('client-overview')?.classList.contains('active')) {
+        loadClientOverview();
+      }
     }
   } catch {
     if (!quiet) showCheckoutAlert('Gagal memeriksa status pembayaran.', 'error');
@@ -554,12 +1105,26 @@ async function simulateClientCheckout() {
   }
 }
 
-async function startClientCheckout(packageId) {
+async function startClientCheckout(packageId, applicationSlug, totalDevices, referralCode) {
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const slug = String(applicationSlug || '').trim() || landingApplicationSlug();
   clearCheckoutAlert();
   openCheckoutModal();
   const subtitle = document.getElementById('checkoutModalSubtitle');
   if (subtitle) subtitle.textContent = 'Menyiapkan pembayaran…';
+
+  const resolvedReferral = referralCode !== undefined && referralCode !== null
+    ? normalizeClientReferralCode(referralCode)
+    : clientCheckoutReferralCode();
+
+  const payload = {
+    package_id: packageId,
+    application_slug: slug,
+    referral_code: resolvedReferral || undefined,
+  };
+  if (totalDevices != null && Number(totalDevices) > 0) {
+    payload.total_devices = Number(totalDevices);
+  }
 
   try {
     const response = await fetch(clientCheckoutUrl, {
@@ -570,11 +1135,7 @@ async function startClientCheckout(packageId) {
         'X-CSRF-TOKEN': csrf,
       },
       credentials: 'same-origin',
-      body: JSON.stringify({
-        package_id: packageId,
-        application_slug: landingApplicationSlug(),
-        referral_code: landingReferralCode() || undefined,
-      }),
+      body: JSON.stringify(payload),
     });
     const { ok, data } = await readJsonResponse(response);
     if (!ok) {
@@ -584,6 +1145,7 @@ async function startClientCheckout(packageId) {
       return;
     }
     renderCheckoutPayment(data.payment, data.message);
+    clearClientLicenseCheckoutReferralCode();
   } catch {
     showCheckoutAlert('Gagal membuat checkout. Periksa koneksi lalu coba lagi.', 'error');
   }
@@ -700,7 +1262,8 @@ function closeModal() {
   modal.setAttribute('hidden', '');
   modal.setAttribute('aria-hidden', 'true');
   if (!document.getElementById('checkoutModal')?.classList.contains('open')
-    && !document.getElementById('appDialogModal')?.classList.contains('open')) {
+    && !document.getElementById('appDialogModal')?.classList.contains('open')
+    && !document.getElementById('clientLicensePackagesModal')?.classList.contains('open')) {
     document.body.style.overflow = '';
   }
 }
@@ -818,6 +1381,219 @@ function updatePublicAuthUI(client) {
   }
 }
 
+let clientReportArchiveApplicationSlug = '';
+let clientReportArchiveApplicationName = '';
+
+function hideClientReportArchiveFeedback() {
+  const el = document.getElementById('clientReportArchiveFeedback');
+  if (!el) return;
+  el.hidden = true;
+  el.textContent = '';
+  el.classList.remove('is-loading', 'is-success', 'is-error');
+}
+
+function showClientReportArchiveFeedback(message, type = 'loading') {
+  const el = document.getElementById('clientReportArchiveFeedback');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = message;
+  el.classList.remove('is-loading', 'is-success', 'is-error');
+  if (type === 'success') el.classList.add('is-success');
+  else if (type === 'error') el.classList.add('is-error');
+  else el.classList.add('is-loading');
+}
+
+function closeClientReportArchiveModal() {
+  const modal = document.getElementById('clientReportArchiveModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+  modal.classList.remove('open');
+  clientReportArchiveApplicationSlug = '';
+  clientReportArchiveApplicationName = '';
+  hideClientReportArchiveFeedback();
+  if (!document.getElementById('checkoutModal')?.classList.contains('open')
+    && !document.getElementById('clientLicensePackagesModal')?.classList.contains('open')
+    && !document.getElementById('clientLicenseDevicesModal')?.classList.contains('open')
+    && !document.getElementById('appDialogModal')?.classList.contains('open')
+    && !document.getElementById('authModal')?.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
+}
+
+function openClientReportArchiveFromBtn(btn) {
+  closeAllDashActionGearMenus();
+  const slug = btn?.getAttribute('data-application-slug') || '';
+  const name = btn?.getAttribute('data-application-name') || '';
+  openClientReportArchiveModal(slug, name);
+}
+
+async function openClientReportArchiveModal(applicationSlug, applicationName) {
+  const slug = String(applicationSlug || '').trim();
+  if (!slug) return;
+
+  const modal = document.getElementById('clientReportArchiveModal');
+  if (!modal) return;
+
+  clientReportArchiveApplicationSlug = slug;
+  clientReportArchiveApplicationName = applicationName || slug;
+
+  const titleEl = document.getElementById('clientReportArchiveTitle');
+  const subtitleEl = document.getElementById('clientReportArchiveSubtitle');
+  const passEl = document.getElementById('clientReportArchivePassword');
+  const confirmEl = document.getElementById('clientReportArchivePasswordConfirm');
+
+  if (titleEl) titleEl.textContent = 'Password arsip laporan';
+  if (subtitleEl) subtitleEl.textContent = `Pengaturan untuk ${clientReportArchiveApplicationName}. Password ini dipakai saat export arsip laporan dari aplikasi desktop.`;
+  if (passEl) passEl.value = '';
+  if (confirmEl) confirmEl.value = '';
+  hideClientReportArchiveFeedback();
+
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  await refreshClientReportArchiveConfigured(slug);
+}
+
+async function refreshClientReportArchiveConfigured(applicationSlug) {
+  const slug = String(applicationSlug || clientReportArchiveApplicationSlug || '').trim();
+  if (!slug) return;
+  try {
+    const response = await fetch(`/api/client/report-archive?application_slug=${encodeURIComponent(slug)}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    const cachedApp = clientLicenseAppsCache.find((row) => String(row.slug) === String(slug));
+    if (cachedApp && typeof data.configured === 'boolean') {
+      cachedApp.report_archive_configured = data.configured;
+    }
+  } catch {
+    // ignore — form tetap bisa disimpan
+  }
+}
+
+function clientSettingsValidationMessage(data) {
+  if (!data?.errors || typeof data.errors !== 'object') return '';
+  const firstKey = Object.keys(data.errors)[0];
+  const first = firstKey ? data.errors[firstKey] : null;
+  return Array.isArray(first) ? first[0] : '';
+}
+
+async function saveClientProfile() {
+  const nameEl = document.getElementById('clientSettingsName');
+  const waEl = document.getElementById('clientSettingsWhatsapp');
+  const msgEl = document.getElementById('clientSettingsMsg');
+  const btn = document.getElementById('clientSettingsSaveBtn');
+  const name = nameEl?.value?.trim() || '';
+  const whatsappRaw = waEl?.value?.trim() || '';
+  const whatsapp = whatsappRaw === '' ? null : whatsappRaw;
+
+  if (!name) {
+    if (msgEl) msgEl.textContent = 'Nama akun wajib diisi.';
+    return;
+  }
+
+  const prev = btn?.textContent;
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Menyimpan…';
+  }
+  if (msgEl) msgEl.textContent = '';
+
+  try {
+    const response = await fetch('/api/client/profile', {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ name, whatsapp }),
+    });
+    const data = await response.json();
+    const fallback = response.ok ? 'Profil berhasil disimpan.' : 'Gagal menyimpan profil.';
+    if (msgEl) {
+      msgEl.textContent = data.message || clientSettingsValidationMessage(data) || fallback;
+    }
+    if (response.ok && data.client) {
+      updateClientDashboard(data.client);
+    }
+  } catch {
+    if (msgEl) msgEl.textContent = 'Tidak dapat menghubungi server.';
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prev || 'Simpan Perubahan';
+    }
+  }
+}
+
+async function saveClientReportArchivePassword() {
+  const passEl = document.getElementById('clientReportArchivePassword');
+  const confirmEl = document.getElementById('clientReportArchivePasswordConfirm');
+  const btn = document.getElementById('clientReportArchiveSaveBtn');
+  const slug = clientReportArchiveApplicationSlug;
+  const password = passEl?.value || '';
+  const confirm = confirmEl?.value || '';
+  if (!slug) {
+    showClientReportArchiveFeedback('Aplikasi tidak valid.', 'error');
+    return;
+  }
+  if (password.length < 8) {
+    showClientReportArchiveFeedback('Password minimal 8 karakter.', 'error');
+    return;
+  }
+  if (password !== confirm) {
+    showClientReportArchiveFeedback('Konfirmasi password tidak sama.', 'error');
+    return;
+  }
+  const prev = btn?.textContent;
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Menyimpan…';
+  }
+  showClientReportArchiveFeedback('Menyimpan password…', 'loading');
+  try {
+    const response = await fetch('/api/client/report-archive', {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ password, application_slug: slug }),
+    });
+    const data = await response.json();
+    if (response.ok) {
+      if (passEl) passEl.value = '';
+      if (confirmEl) confirmEl.value = '';
+      if (clientSession) clientSession.report_archive_configured = true;
+      const cachedApp = clientLicenseAppsCache.find((row) => String(row.slug) === String(slug));
+      if (cachedApp) cachedApp.report_archive_configured = true;
+      showClientReportArchiveFeedback(
+        data.message || 'Password arsip berhasil disimpan.',
+        'success',
+      );
+    } else {
+      showClientReportArchiveFeedback(data.message || 'Gagal menyimpan password.', 'error');
+    }
+  } catch {
+    showClientReportArchiveFeedback('Tidak dapat menghubungi server.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prev || 'Simpan password arsip';
+    }
+  }
+}
+
 function updateClientDashboard(client) {
   if (!client) return;
 
@@ -874,6 +1650,102 @@ function copyClientRefLink() {
   }).catch(() => {});
 }
 
+function clearClientAffiliateCodeStatus() {
+  const el = document.getElementById('clientAffiliateCodeStatus');
+  if (!el) return;
+  el.textContent = '';
+  el.className = 'client-affiliate-code-status';
+}
+
+function setClientAffiliateCodeStatus(message, type) {
+  const el = document.getElementById('clientAffiliateCodeStatus');
+  if (!el) return;
+  el.textContent = message || '';
+  el.className = `client-affiliate-code-status${type ? ` is-${type}` : ''}`;
+}
+
+function onClientAffiliateCodeInput() {
+  const input = document.getElementById('clientAffiliateCodeInput');
+  if (!input) return;
+  const normalized = normalizeClientReferralCode(input.value);
+  if (input.value !== normalized) input.value = normalized;
+  clearClientAffiliateCodeStatus();
+}
+
+function syncClientAffiliateCodeInput(code) {
+  const input = document.getElementById('clientAffiliateCodeInput');
+  if (input) input.value = normalizeClientReferralCode(code || '');
+}
+
+async function saveClientAffiliateCode() {
+  const input = document.getElementById('clientAffiliateCodeInput');
+  const btn = document.getElementById('clientAffiliateCodeSaveBtn');
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const code = normalizeClientReferralCode(input?.value);
+
+  clearClientAffiliateCodeStatus();
+
+  if (!code) {
+    setClientAffiliateCodeStatus('Kode wajib diisi.', 'error');
+    return;
+  }
+
+  const formatMsg = affiliateReferralCodeValidationMessage(code);
+  if (formatMsg) {
+    setClientAffiliateCodeStatus(formatMsg, 'error');
+    return;
+  }
+
+  const confirmed = await openAppDialog({
+    type: 'confirm',
+    title: 'Ganti kode referral',
+    message: 'Link dan voucher lama tidak akan berlaku lagi. Lanjutkan?',
+    okText: 'Simpan',
+    cancelText: 'Batal',
+    danger: true,
+  });
+  if (!confirmed) return;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Menyimpan…';
+  }
+
+  try {
+    const response = await fetch(clientAffiliateCodeUrl, {
+      method: 'PATCH',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ code }),
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      const msg = data.errors?.code?.[0] || data.message || 'Gagal menyimpan kode.';
+      setClientAffiliateCodeStatus(msg, 'error');
+      return;
+    }
+
+    const affiliate = data.affiliate || {};
+    syncClientAffiliateCodeInput(affiliate.code);
+    const refEl = document.getElementById('clientRefLinkText');
+    if (refEl && affiliate.referral_url) refEl.textContent = affiliate.referral_url;
+    setClientAffiliateCodeStatus(data.message || 'Kode diperbarui.', 'success');
+    await restoreClientSession();
+  } catch {
+    setClientAffiliateCodeStatus('Tidak dapat menghubungi server.', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Simpan';
+    }
+  }
+}
+
 function affiliateStatusBadge(status) {
   const map = {
     paid: 'badge-paid',
@@ -883,8 +1755,8 @@ function affiliateStatusBadge(status) {
   return map[status] || 'badge-pending';
 }
 
-function renderClientAffiliatePagination(pagination) {
-  const wrap = document.getElementById('clientAffiliatePagination');
+function renderDashPagination(container, pagination, pageLoaderName) {
+  const wrap = typeof container === 'string' ? document.getElementById(container) : container;
   if (!wrap) return;
 
   if (!pagination || pagination.last_page <= 1) {
@@ -902,13 +1774,17 @@ function renderClientAffiliatePagination(pagination) {
       if (p === 3 || p === last - 2) pages += '<span class="dash-pagination-ellipsis">…</span>';
       continue;
     }
-    pages += `<button type="button" class="dash-pagination-btn${p === current ? ' active' : ''}" onclick="loadClientAffiliate(${p})">${p}</button>`;
+    pages += `<button type="button" class="dash-pagination-btn${p === current ? ' active' : ''}" onclick="${pageLoaderName}(${p})">${p}</button>`;
   }
 
   wrap.innerHTML = `
-    <button type="button" class="dash-pagination-btn" ${current <= 1 ? 'disabled' : ''} onclick="loadClientAffiliate(${current - 1})">Sebelumnya</button>
+    <button type="button" class="dash-pagination-btn" ${current <= 1 ? 'disabled' : ''} onclick="${pageLoaderName}(${current - 1})">Sebelumnya</button>
     <div class="dash-pagination-pages">${pages}</div>
-    <button type="button" class="dash-pagination-btn" ${current >= last ? 'disabled' : ''} onclick="loadClientAffiliate(${current + 1})">Berikutnya</button>`;
+    <button type="button" class="dash-pagination-btn" ${current >= last ? 'disabled' : ''} onclick="${pageLoaderName}(${current + 1})">Berikutnya</button>`;
+}
+
+function renderClientAffiliatePagination(pagination) {
+  renderDashPagination(document.getElementById('clientAffiliatePagination'), pagination, 'loadClientAffiliate');
 }
 
 async function loadClientAffiliate(page = clientAffiliatePage) {
@@ -917,7 +1793,8 @@ async function loadClientAffiliate(page = clientAffiliatePage) {
   const metaEl = document.getElementById('clientAffiliateTableMeta');
   if (!referralsBody && !document.getElementById('clientAffiliateEnrollCard')) return;
 
-  const loading = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">Memuat…</td></tr>';
+  const affiliateReferralColspan = 6;
+  const loading = `<tr><td colspan="${affiliateReferralColspan}" style="text-align:center;color:var(--text-3);padding:24px;">Memuat…</td></tr>`;
   if (referralsBody) referralsBody.innerHTML = loading;
   if (metaEl) metaEl.textContent = '';
 
@@ -932,7 +1809,7 @@ async function loadClientAffiliate(page = clientAffiliatePage) {
     if (!response.ok) {
       const msg = data.message || 'Gagal memuat data affiliate.';
       setClientAffiliateOverviewMode('enroll');
-      if (referralsBody) referralsBody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">${escapeHtml(msg)}</td></tr>`;
+      if (referralsBody) referralsBody.innerHTML = `<tr><td colspan="${affiliateReferralColspan}" style="text-align:center;color:var(--text-3);padding:24px;">${escapeHtml(msg)}</td></tr>`;
       renderClientAffiliatePagination(null);
       return;
     }
@@ -957,20 +1834,19 @@ async function loadClientAffiliate(page = clientAffiliatePage) {
 
     const refEl = document.getElementById('clientRefLinkText');
     if (refEl && summary.referral_url) refEl.textContent = summary.referral_url;
+    syncClientAffiliateCodeInput(summary.code);
 
     const rows = (data.referrals || []).map((row) => `
       <tr>
         <td class="td-bold">${escapeHtml(row.customer_name || '—')}</td>
-        <td>${escapeHtml(row.customer_email || '—')}</td>
-        <td>${escapeHtml(row.application_name || '—')}</td>
-        <td>${escapeHtml(row.package_name || '—')}</td>
+        <td>${escapeHtml(row.description || '—')}</td>
         <td>${escapeHtml(row.amount_label || '—')}</td>
         <td class="${row.status === 'paid' ? 'td-green' : 'td-amber'}">${escapeHtml(row.commission_label || '—')}</td>
         <td>${escapeHtml(row.date || '—')}</td>
         <td><span class="badge ${affiliateStatusBadge(row.status)}">${escapeHtml(row.status_label || row.status || '—')}</span></td>
       </tr>`).join('');
 
-    const empty = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">Belum ada referral.</td></tr>';
+    const empty = `<tr><td colspan="${affiliateReferralColspan}" style="text-align:center;color:var(--text-3);padding:24px;">Belum ada referral.</td></tr>`;
     if (referralsBody) referralsBody.innerHTML = rows || empty;
 
     const p = data.pagination;
@@ -980,7 +1856,7 @@ async function loadClientAffiliate(page = clientAffiliatePage) {
     renderClientAffiliatePagination(p);
   } catch {
     setClientAffiliateOverviewMode('enroll');
-    if (referralsBody) referralsBody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">Gagal memuat.</td></tr>';
+    if (referralsBody) referralsBody.innerHTML = `<tr><td colspan="${affiliateReferralColspan}" style="text-align:center;color:var(--text-3);padding:24px;">Gagal memuat.</td></tr>`;
     renderClientAffiliatePagination(null);
   }
 }
@@ -1086,8 +1962,871 @@ function clientLicenseDaysLabel(expiresAt) {
   const days = clientDaysRemaining(expiresAt);
   if (days === '—') return '—';
   const n = Number(days);
-  if (n <= 0) return 'Sudah kedaluwarsa';
+  if (n <= 0) return 'Expired';
   return `${n} hari lagi`;
+}
+
+function clientLicenseIsTrialPackage(app) {
+  const status = String(app?.purchase_status || app?.license_status || '').toLowerCase();
+  if (status === 'trial') return true;
+  const name = String(app?.package?.name || '').toLowerCase();
+  return name.includes('trial');
+}
+
+function clientLicenseIsHighestTier(app) {
+  if (app?.is_highest_tier === true) return true;
+  if (app?.is_highest_tier === false) return false;
+  const name = clientNormPackageName(app?.package?.name);
+  return name.includes('ultimate') || name.includes('platinum');
+}
+
+function clientLicenseCommerceButtonLabel(app) {
+  const status = clientLicenseStatusForDisplay(app);
+  if (status === 'expired') {
+    return 'Perpanjang / Beli paket';
+  }
+  if (clientLicenseIsTrialPackage(app)) {
+    return 'Beli paket';
+  }
+  return 'Upgrade';
+}
+
+function clientLicenseShowCommerceButton(app) {
+  if (!String(app?.slug || '').trim()) return false;
+  const status = clientLicenseStatusForDisplay(app);
+  if (status === 'expired') return true;
+  if (clientLicenseIsHighestTier(app)) return false;
+  return true;
+}
+
+function clientLicenseCommerceDialogModeFor(app) {
+  const status = clientLicenseStatusForDisplay(app);
+  if (status === 'expired' && !clientLicenseIsTrialPackage(app)) {
+    return 'renew';
+  }
+  return 'upgrade';
+}
+
+function clientNormPackageName(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function clientIsSameLicensePackage(plan, app) {
+  if (!plan || !app) return false;
+  const curId = Number(app.package?.id ?? 0);
+  const tgtId = Number(plan.package_id ?? 0);
+  if (curId > 0 && tgtId > 0 && curId === tgtId) return true;
+  const cur = clientNormPackageName(app.package?.name);
+  const tgt = clientNormPackageName(plan.name);
+  return Boolean(cur && tgt && cur === tgt);
+}
+
+function clientPlanSortOrder(plan, plans) {
+  const sortOrder = Number(plan?.sort_order);
+  if (Number.isFinite(sortOrder)) return sortOrder;
+  const idx = (plans || []).findIndex((row) => Number(row.package_id) === Number(plan.package_id));
+  return idx >= 0 ? idx : -1;
+}
+
+function clientCurrentPackageSortOrder(app, plans) {
+  const fromPkg = Number(app?.package?.sort_order);
+  if (Number.isFinite(fromPkg)) return fromPkg;
+  const curId = Number(app?.package?.id ?? 0);
+  if (curId > 0) {
+    const match = (plans || []).find((row) => Number(row.package_id) === curId);
+    if (match) return clientPlanSortOrder(match, plans);
+  }
+  return -1;
+}
+
+function clientIsPackageUpgradeTarget(plan, app, plans) {
+  const curRank = clientCurrentPackageSortOrder(app, plans);
+  const tgtRank = clientPlanSortOrder(plan, plans);
+  if (curRank < 0 || tgtRank < 0) return false;
+  return tgtRank > curRank;
+}
+
+/** renew | upgrade | purchase — selaras dengan SpotColor scResolveCheckoutFlow */
+function clientResolveCheckoutFlow(plan, app, plans, dialogMode) {
+  const mode = dialogMode || clientLicenseCommerceDialogMode || 'upgrade';
+  if (clientLicenseIsTrialPackage(app)) {
+    if (clientIsSameLicensePackage(plan, app)) return 'purchase';
+    return clientIsPackageUpgradeTarget(plan, app, plans) ? 'upgrade' : 'purchase';
+  }
+  if (clientIsSameLicensePackage(plan, app)) return 'renew';
+  if (mode === 'upgrade' && clientIsPackageUpgradeTarget(plan, app, plans)) return 'upgrade';
+  return 'purchase';
+}
+
+function clientResolvePlanCheckoutLabel(plan, app, plans, dialogMode) {
+  const flow = clientResolveCheckoutFlow(plan, app, plans, dialogMode);
+  const name = String(plan?.name || '').trim();
+  if (flow === 'renew') return 'Perpanjang';
+  if (flow === 'upgrade') return 'Pilih';
+  return name ? `Beli ${name}` : 'Beli';
+}
+
+function showClientLicensePackagesAlert(message, type = 'warning') {
+  const alert = document.getElementById('clientLicensePackagesAlert');
+  if (!alert) return;
+  alert.style.display = message ? 'block' : 'none';
+  alert.className = `auth-alert auth-alert-${type}`;
+  alert.textContent = message || '';
+}
+
+function closeClientLicensePackagesModal() {
+  const modal = document.getElementById('clientLicensePackagesModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('hidden', '');
+  modal.setAttribute('aria-hidden', 'true');
+  showClientLicensePackagesAlert('');
+  if (!document.getElementById('checkoutModal')?.classList.contains('open')
+    && !document.getElementById('appDialogModal')?.classList.contains('open')
+    && !document.getElementById('authModal')?.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
+}
+
+function openClientLicensePackagesModalShell(title, subtitle) {
+  const modal = document.getElementById('clientLicensePackagesModal');
+  if (!modal) return false;
+  const titleEl = document.getElementById('clientLicensePackagesTitle');
+  const subtitleEl = document.getElementById('clientLicensePackagesSubtitle');
+  if (titleEl) titleEl.textContent = title || 'Pilih paket';
+  if (subtitleEl) subtitleEl.textContent = subtitle || '';
+  modal.removeAttribute('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  showClientLicensePackagesAlert('');
+  return true;
+}
+
+async function fetchClientCommercePlans(applicationSlug, options = {}) {
+  const { force = false } = options;
+  const slug = String(applicationSlug || '').trim() || landingApplicationSlug();
+  if (!force && clientCommercePlansCache.has(slug)) {
+    return clientCommercePlansCache.get(slug);
+  }
+
+  const url = `${clientCommercePlansUrl}?application_slug=${encodeURIComponent(slug)}`;
+  const promise = fetch(url, {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  })
+    .then((response) => readJsonResponse(response))
+    .then((result) => {
+      if (!result.ok) {
+        clientCommercePlansCache.delete(slug);
+        return result;
+      }
+      return result;
+    })
+    .catch(() => {
+      clientCommercePlansCache.delete(slug);
+      return { ok: false, data: { message: 'Gagal memuat paket.' } };
+    });
+
+  clientCommercePlansCache.set(slug, promise);
+  return promise;
+}
+
+function invalidateClientCommercePlansCache(applicationSlug) {
+  const slug = String(applicationSlug || '').trim();
+  if (slug) clientCommercePlansCache.delete(slug);
+  else clientCommercePlansCache.clear();
+}
+
+function renderClientLicensePackageOptions(plans, applicationSlug, app, dialogMode) {
+  const checkoutPlans = (plans || []).filter((p) => {
+    const action = landingPlanCtaAction(p);
+    return action === 'checkout' && p.cta_enabled !== false && Number(p.package_id) > 0;
+  });
+  if (!checkoutPlans.length) {
+    return '<p class="client-license-packages-empty">Tidak ada paket yang bisa dipilih saat ini. Jika lisensi masih aktif, upgrade hanya tersedia ke paket di atas tier Anda.</p>';
+  }
+  const slugAttr = escapeHtml(applicationSlug || '');
+  const mode = dialogMode || clientLicenseCommerceDialogMode || 'upgrade';
+  return `<div class="client-license-packages-list">${checkoutPlans.map((p) => {
+    const packageId = Number(p.package_id);
+    const label = app
+      ? clientResolvePlanCheckoutLabel(p, app, plans, mode)
+      : landingPlanButtonLabel(p);
+    return `<button type="button" class="client-license-package-option" data-package-id="${packageId}" data-application-slug="${slugAttr}" onclick="selectClientLicensePackage(this)">
+      <span class="client-license-package-option-main">
+        <span class="client-license-package-option-name">${escapeHtml(p.name || '')}</span>
+        <span class="client-license-package-option-price">${escapeHtml(p.price || '')}<span class="client-license-package-option-period">${escapeHtml(p.period ? ` ${p.period}` : '')}</span></span>
+      </span>
+      <span class="btn btn-primary client-license-package-option-btn">${escapeHtml(label)}</span>
+    </button>`;
+  }).join('')}</div>`;
+}
+
+function planMaxTotalDevices(plan) {
+  const base = Math.max(1, Number(plan?.devices_quota || 1));
+  const maxExtra = Math.max(0, Number(plan?.max_extra_device_slots || 0));
+  return base + maxExtra;
+}
+
+function planCheckoutNeedsDeviceStep(plan) {
+  if (!plan || plan.is_trial) return false;
+  return Number(plan.max_extra_device_slots || 0) > 0;
+}
+
+function parsePlanPriceAmount(plan) {
+  if (plan && plan.price_amount != null && !Number.isNaN(Number(plan.price_amount))) {
+    return Number(plan.price_amount);
+  }
+  return parseAdminPackagePriceInput(plan?.price || 0);
+}
+
+function computeCheckoutDevicePricing(plan, totalDevices) {
+  const base = Math.max(1, Number(plan?.devices_quota || 1));
+  const maxTotal = planMaxTotalDevices(plan);
+  let total = Number(totalDevices);
+  if (!Number.isFinite(total)) total = base;
+  total = Math.min(maxTotal, Math.max(base, total));
+  const extra = Math.max(0, total - base);
+  const slotPrice = Number(plan?.device_slot_price || 0);
+  const packagePrice = parsePlanPriceAmount(plan);
+  return {
+    total,
+    extra,
+    base,
+    maxTotal,
+    slotPrice,
+    packagePrice,
+    subtotal: packagePrice + extra * slotPrice,
+  };
+}
+
+function formatCheckoutIdr(amount) {
+  return `Rp ${Math.round(Number(amount || 0)).toLocaleString('id-ID')}`;
+}
+
+function formatCheckoutPlanHeadline(plan) {
+  const parts = [];
+  const days = Number(plan?.duration_days ?? 0);
+  if (days > 0) {
+    parts.push(`${days} hari`);
+  } else if (plan?.period) {
+    const period = String(plan.period).replace(/^\s*\/\s*/, '').trim();
+    if (period) parts.push(period);
+  }
+  const base = Math.max(1, Number(plan?.devices_quota || 1));
+  parts.push(`${base} device`);
+  return parts.join(' · ');
+}
+
+function formatCheckoutDeviceRowLabel(pricing) {
+  const base = Math.max(1, Number(pricing.base ?? 1));
+  const extra = Math.max(0, Number(pricing.extra ?? 0));
+  const basePc = `${base} PC`;
+  if (extra <= 0) {
+    return `Jumlah device (${basePc})`;
+  }
+  return `Jumlah device (${basePc}) + Extra ${extra} PC × ${formatCheckoutIdr(pricing.slotPrice)}`;
+}
+
+function formatCheckoutDeviceRowAmount(pricing) {
+  const extra = Math.max(0, Number(pricing.extra ?? 0));
+  if (extra <= 0) {
+    return '<span class="client-license-device-slots-summary-amount" aria-hidden="true"></span>';
+  }
+  return `<strong class="client-license-device-slots-summary-amount">${formatCheckoutIdr(extra * pricing.slotPrice)}</strong>`;
+}
+
+function renderCheckoutDeviceSummaryDiscountRow(voucherTotals) {
+  if (!voucherTotals || voucherTotals.discountAmount <= 0) return '';
+  const pctLabel = formatCheckoutDiscountPercent(voucherTotals.discountPercent);
+  return `<div class="client-license-device-slots-summary-row client-license-device-slots-summary-discount">
+      <span class="client-license-device-slots-summary-label">Potongan voucher (${pctLabel})</span>
+      <strong class="client-license-device-slots-summary-amount client-license-device-slots-summary-discount-amount">−${formatCheckoutIdr(voucherTotals.discountAmount)}</strong>
+    </div>`;
+}
+
+function renderCheckoutDeviceSummaryHtml(pricing, voucherTotals) {
+  const total = voucherTotals?.finalTotal ?? pricing.subtotal;
+  return `<div class="client-license-device-slots-summary-row">
+      <span class="client-license-device-slots-summary-label">Harga paket</span>
+      <strong class="client-license-device-slots-summary-amount">${formatCheckoutIdr(pricing.packagePrice)}</strong>
+    </div>
+    <div class="client-license-device-slots-summary-row">
+      <span class="client-license-device-slots-summary-label">${formatCheckoutDeviceRowLabel(pricing)}</span>
+      ${formatCheckoutDeviceRowAmount(pricing)}
+    </div>
+    ${renderCheckoutDeviceSummaryDiscountRow(voucherTotals)}
+    <div class="client-license-device-slots-summary-row client-license-device-slots-total">
+      <span class="client-license-device-slots-summary-label">Estimasi total</span>
+      <strong class="client-license-device-slots-summary-amount">${formatCheckoutIdr(total)}</strong>
+    </div>`;
+}
+
+async function promptClientCheckoutDevices(plan, packageId, applicationSlug) {
+  if (!planCheckoutNeedsDeviceStep(plan)) {
+    await startClientCheckout(packageId, applicationSlug);
+    return;
+  }
+  openClientCheckoutDevicesModal(plan, packageId, applicationSlug);
+}
+
+function clientCanAddDeviceSlots(app) {
+  if (!app || clientLicenseIsTrialPackage(app)) return false;
+  if (clientLicenseStatusForDisplay(app) !== 'active') return false;
+  const maxExtra = Number(app.max_extra_device_slots || 0);
+  const currentExtra = Number(app.extra_device_slots || 0);
+  if (maxExtra - currentExtra <= 0) return false;
+  return Number(app.device_slot_price || 0) > 0;
+}
+
+function clientRemainingPurchasableSlots(app) {
+  const maxExtra = Number(app?.max_extra_device_slots || 0);
+  const currentExtra = Number(app?.extra_device_slots || 0);
+  return Math.max(0, maxExtra - currentExtra);
+}
+
+function showClientLicenseDeviceSlotsAlert(message, type = 'error') {
+  const el = document.getElementById('clientLicenseDeviceSlotsAlert');
+  if (!el) return;
+  el.style.display = message ? 'block' : 'none';
+  el.textContent = message || '';
+  el.classList.remove('is-error', 'is-success');
+  el.classList.add(type === 'success' ? 'is-success' : 'is-error');
+}
+
+function clientLicenseDeviceSlotsBounds(ctx) {
+  if (!ctx) {
+    return { min: 1, max: 99 };
+  }
+  if (ctx.mode === 'add') {
+    return { min: 1, max: Math.max(1, Number(ctx.maxAdd || 1)) };
+  }
+  const base = Math.max(1, Number(ctx.plan?.devices_quota || 1));
+  return { min: base, max: planMaxTotalDevices(ctx.plan) };
+}
+
+function clientLicenseDeviceSlotsLimitMessage(ctx, raw, bounds) {
+  if (!Number.isFinite(raw)) {
+    return '';
+  }
+  if (raw < bounds.min) {
+    if (ctx?.mode === 'add') {
+      return 'Minimal 1 slot tambahan.';
+    }
+    return `Jumlah device minimal ${bounds.min} PC (limit default paket).`;
+  }
+  if (raw > bounds.max) {
+    if (ctx?.mode === 'add') {
+      return `Maksimal ${bounds.max} slot tambahan untuk paket ini.`;
+    }
+    return `Jumlah device maksimal ${bounds.max} PC untuk paket ini.`;
+  }
+  return '';
+}
+
+function showClientLicenseDeviceSlotsLimitInfo(message) {
+  const el = document.getElementById('clientLicenseDeviceSlotsLimitInfo');
+  if (!el) return;
+  const text = String(message || '').trim();
+  if (!text) {
+    el.hidden = true;
+    el.textContent = '';
+    return;
+  }
+  el.hidden = false;
+  el.textContent = text;
+}
+
+function syncClientLicenseDeviceSlotsUi(reclampInput = false) {
+  const ctx = clientLicenseDeviceSlotsContext;
+  const input = document.getElementById('clientLicenseDeviceSlotsInput');
+  const summary = document.getElementById('clientLicenseDeviceSlotsSummary');
+  const confirmBtn = document.getElementById('clientLicenseDeviceSlotsConfirmBtn');
+  const deviceLabel = document.getElementById('clientLicenseDeviceSlotsDeviceLabel');
+  const footnote = document.getElementById('clientLicenseDeviceSlotsFootnote');
+  if (!ctx || !input) return;
+
+  const bounds = clientLicenseDeviceSlotsBounds(ctx);
+  const rawValue = Number(input.value);
+  const limitMsg = clientLicenseDeviceSlotsLimitMessage(ctx, rawValue, bounds);
+  if (limitMsg) {
+    showClientLicenseDeviceSlotsLimitInfo(limitMsg);
+  } else if (reclampInput || Number.isFinite(rawValue)) {
+    showClientLicenseDeviceSlotsLimitInfo('');
+  }
+
+  let pricing;
+  if (ctx.mode === 'add') {
+    input.min = String(bounds.min);
+    input.max = String(bounds.max);
+    const slots = Math.max(bounds.min, Math.min(bounds.max, Number(input.value || bounds.min)));
+    if (reclampInput) input.value = String(slots);
+    const slotPrice = Number(ctx.slotPrice || 0);
+    pricing = {
+      total: slots,
+      extra: slots,
+      slotPrice,
+      packagePrice: 0,
+      subtotal: slots * slotPrice,
+    };
+    if (deviceLabel) deviceLabel.textContent = 'Jumlah device';
+    if (footnote) footnote.hidden = false;
+  } else {
+    input.min = String(bounds.min);
+    input.max = String(bounds.max);
+    let total = Number(input.value);
+    if (!Number.isFinite(total)) total = bounds.min;
+    if (reclampInput || total < bounds.min || total > bounds.max) {
+      total = Math.min(bounds.max, Math.max(bounds.min, total));
+      input.value = String(total);
+    }
+    pricing = computeCheckoutDevicePricing(ctx.plan, total);
+    if (deviceLabel) deviceLabel.textContent = 'Jumlah device';
+    if (footnote) footnote.hidden = false;
+  }
+
+  const voucherTotals = computeCheckoutVoucherTotals(
+    pricing.subtotal,
+    clientLicenseVoucherDiscountPercent(ctx),
+  );
+
+  if (summary) {
+    if (ctx.mode === 'add') {
+      const extra = Number(pricing.extra ?? 0);
+      const deviceLabelText = `Jumlah device (+${extra} PC) × ${formatCheckoutIdr(pricing.slotPrice)}`;
+      const total = voucherTotals.finalTotal;
+      summary.innerHTML = `<div class="client-license-device-slots-summary-row">
+          <span class="client-license-device-slots-summary-label">${deviceLabelText}</span>
+          <strong class="client-license-device-slots-summary-amount">${formatCheckoutIdr(pricing.subtotal)}</strong>
+        </div>
+        ${renderCheckoutDeviceSummaryDiscountRow(voucherTotals)}
+        <div class="client-license-device-slots-summary-row client-license-device-slots-total">
+          <span class="client-license-device-slots-summary-label">Estimasi total</span>
+          <strong class="client-license-device-slots-summary-amount">${formatCheckoutIdr(total)}</strong>
+        </div>`;
+    } else {
+      summary.innerHTML = renderCheckoutDeviceSummaryHtml(pricing, voucherTotals);
+    }
+  }
+
+  if (confirmBtn) {
+    confirmBtn.textContent = ctx.mode === 'add' ? 'Bayar slot tambahan' : 'Lanjut ke pembayaran';
+  }
+}
+
+function bindClientLicenseDeviceSlotsModalOnce() {
+  const modal = document.getElementById('clientLicenseDeviceSlotsModal');
+  if (!modal || modal.dataset.bound === '1') return;
+  modal.dataset.bound = '1';
+
+  const input = document.getElementById('clientLicenseDeviceSlotsInput');
+  const dec = document.getElementById('clientLicenseDeviceSlotsDec');
+  const inc = document.getElementById('clientLicenseDeviceSlotsInc');
+  const confirmBtn = document.getElementById('clientLicenseDeviceSlotsConfirmBtn');
+
+  input?.addEventListener('input', () => syncClientLicenseDeviceSlotsUi(false));
+  input?.addEventListener('change', () => syncClientLicenseDeviceSlotsUi(true));
+  dec?.addEventListener('click', () => {
+    const ctx = clientLicenseDeviceSlotsContext;
+    const bounds = clientLicenseDeviceSlotsBounds(ctx);
+    const current = Number(input.value || bounds.min);
+    if (current <= bounds.min) {
+      showClientLicenseDeviceSlotsLimitInfo(
+        clientLicenseDeviceSlotsLimitMessage(ctx, bounds.min - 1, bounds),
+      );
+      return;
+    }
+    showClientLicenseDeviceSlotsLimitInfo('');
+    input.value = String(current - 1);
+    syncClientLicenseDeviceSlotsUi(false);
+  });
+  inc?.addEventListener('click', () => {
+    const ctx = clientLicenseDeviceSlotsContext;
+    const bounds = clientLicenseDeviceSlotsBounds(ctx);
+    const current = Number(input.value || bounds.min);
+    if (current >= bounds.max) {
+      showClientLicenseDeviceSlotsLimitInfo(
+        clientLicenseDeviceSlotsLimitMessage(ctx, bounds.max + 1, bounds),
+      );
+      return;
+    }
+    showClientLicenseDeviceSlotsLimitInfo('');
+    input.value = String(current + 1);
+    syncClientLicenseDeviceSlotsUi(false);
+  });
+  confirmBtn?.addEventListener('click', () => confirmClientLicenseDeviceSlotsModal());
+
+  const referralInput = document.getElementById('clientLicenseDeviceSlotsReferral');
+  const referralApply = document.getElementById('clientLicenseDeviceSlotsReferralApplyBtn');
+  referralInput?.addEventListener('input', () => onClientLicenseReferralInput());
+  referralApply?.addEventListener('click', () => applyClientLicenseDeviceSlotsReferral());
+
+  document.getElementById('clientAffiliateCodeInput')?.addEventListener('input', () => onClientAffiliateCodeInput());
+}
+
+function openClientCheckoutDevicesModal(plan, packageId, applicationSlug) {
+  bindClientLicenseDeviceSlotsModalOnce();
+  const base = Math.max(1, Number(plan?.devices_quota || 1));
+  clientLicenseDeviceSlotsContext = {
+    mode: 'checkout',
+    plan,
+    packageId,
+    applicationSlug,
+    voucherDiscountPercent: Math.max(0, Math.min(100, Number(plan?.discount_percent ?? 0))),
+  };
+  const title = document.getElementById('clientLicenseDeviceSlotsTitle');
+  const subtitle = document.getElementById('clientLicenseDeviceSlotsSubtitle');
+  if (title) title.textContent = String(plan?.name || 'Paket').trim() || 'Paket';
+  if (subtitle) subtitle.textContent = formatCheckoutPlanHeadline(plan);
+  showClientLicenseDeviceSlotsAlert('');
+  showClientLicenseDeviceSlotsLimitInfo('');
+  resetClientLicenseVoucherUi();
+  syncClientCheckoutReferralAcrossFields();
+  primeClientCheckoutReferralFields();
+  const input = document.getElementById('clientLicenseDeviceSlotsInput');
+  if (input) {
+    input.min = String(base);
+    input.max = String(planMaxTotalDevices(plan));
+    input.value = String(base);
+  }
+  const modal = document.getElementById('clientLicenseDeviceSlotsModal');
+  if (modal) {
+    modal.hidden = false;
+    modal.removeAttribute('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  syncClientLicenseDeviceSlotsUi();
+}
+
+function openClientAddDeviceSlotsFromBtn(btn) {
+  const appId = Number(btn?.dataset?.appId);
+  const app = clientLicenseAppsCache.find((row) => Number(row.id) === appId);
+  if (!app || !clientCanAddDeviceSlots(app)) return;
+  bindClientLicenseDeviceSlotsModalOnce();
+  const maxAdd = clientRemainingPurchasableSlots(app);
+  clientLicenseDeviceSlotsContext = {
+    mode: 'add',
+    app,
+    applicationSlug: app.slug,
+    maxAdd,
+    slotPrice: Number(app.device_slot_price || 0),
+    voucherDiscountPercent: clientLicenseAppPackageDiscountPercent(app),
+  };
+  const title = document.getElementById('clientLicenseDeviceSlotsTitle');
+  const subtitle = document.getElementById('clientLicenseDeviceSlotsSubtitle');
+  const pkgName = String(app?.package?.name || '').trim();
+  if (title) title.textContent = pkgName || String(app?.name || 'Paket').trim();
+  if (subtitle) {
+    const parts = [];
+    const days = Number(app?.package?.duration_days ?? 0);
+    if (days > 0) parts.push(`${days} hari`);
+    const maxTotal = Number(app?.devices_max ?? app?.package?.devices_quota ?? 0);
+    if (maxTotal > 0) parts.push(`${maxTotal} device saat ini`);
+    subtitle.textContent = parts.join(' · ') || String(app?.name || '');
+  }
+  showClientLicenseDeviceSlotsAlert('');
+  showClientLicenseDeviceSlotsLimitInfo('');
+  resetClientLicenseVoucherUi();
+  syncClientCheckoutReferralAcrossFields();
+  primeClientCheckoutReferralFields();
+  const input = document.getElementById('clientLicenseDeviceSlotsInput');
+  if (input) {
+    input.min = '1';
+    input.max = String(maxAdd);
+    input.value = '1';
+  }
+  const modal = document.getElementById('clientLicenseDeviceSlotsModal');
+  if (modal) {
+    modal.hidden = false;
+    modal.removeAttribute('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  syncClientLicenseDeviceSlotsUi();
+}
+
+function closeClientLicenseDeviceSlotsModal(options = {}) {
+  const { preserveCheckoutReferral = false } = options;
+  const modal = document.getElementById('clientLicenseDeviceSlotsModal');
+  if (modal) {
+    modal.hidden = true;
+    modal.setAttribute('hidden', '');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.classList.remove('open');
+    if (!document.getElementById('checkoutModal')?.classList.contains('open')) {
+      document.body.style.overflow = '';
+    }
+  }
+  clientLicenseDeviceSlotsContext = null;
+  resetClientLicenseVoucherUi(!preserveCheckoutReferral);
+  showClientLicenseDeviceSlotsAlert('');
+  showClientLicenseDeviceSlotsLimitInfo('');
+}
+
+async function confirmClientLicenseDeviceSlotsModal() {
+  const ctx = clientLicenseDeviceSlotsContext;
+  const input = document.getElementById('clientLicenseDeviceSlotsInput');
+  if (!ctx || !input) return;
+
+  if (clientLicenseDeviceSlotsVoucherMismatch()) {
+    showClientLicenseDeviceSlotsAlert(
+      'Terapkan kode voucher terlebih dahulu, atau kosongkan kolomnya.',
+      'error',
+    );
+    return;
+  }
+
+  if (ctx.mode === 'add') {
+    const slots = Math.max(1, Math.min(ctx.maxAdd, Number(input.value || 1)));
+    const referralCode = clientCheckoutReferralCode();
+    closeClientLicenseDeviceSlotsModal({ preserveCheckoutReferral: !!referralCode });
+    await startClientDeviceSlotCheckout(ctx.applicationSlug, slots, referralCode);
+    return;
+  }
+
+  const pricing = computeCheckoutDevicePricing(ctx.plan, input.value);
+  const referralCode = clientCheckoutReferralCode();
+  closeClientLicenseDeviceSlotsModal({ preserveCheckoutReferral: !!referralCode });
+  closeClientLicensePackagesModal();
+  invalidateClientCommercePlansCache(ctx.applicationSlug);
+  await startClientCheckout(ctx.packageId, ctx.applicationSlug, pricing.total, referralCode);
+}
+
+async function startClientDeviceSlotCheckout(applicationSlug, additionalSlots, referralCode) {
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const slug = String(applicationSlug || '').trim();
+  clearCheckoutAlert();
+  openCheckoutModal();
+  const subtitle = document.getElementById('checkoutModalSubtitle');
+  if (subtitle) subtitle.textContent = 'Menyiapkan pembayaran slot…';
+
+  const resolvedReferral = referralCode !== undefined && referralCode !== null
+    ? normalizeClientReferralCode(referralCode)
+    : clientCheckoutReferralCode();
+
+  try {
+    const response = await fetch(clientDeviceSlotsCheckoutUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        application_slug: slug,
+        additional_slots: Number(additionalSlots),
+        referral_code: resolvedReferral || undefined,
+      }),
+    });
+    const { ok, data } = await readJsonResponse(response);
+    if (!ok) {
+      showCheckoutAlert(data.message || 'Checkout gagal.', 'error');
+      if (subtitle) subtitle.textContent = 'Pembayaran tidak dapat dibuat';
+      return;
+    }
+    renderCheckoutPayment(data.payment, data.message);
+    clearClientLicenseCheckoutReferralCode();
+  } catch {
+    showCheckoutAlert('Gagal membuat checkout. Periksa koneksi lalu coba lagi.', 'error');
+  }
+}
+
+async function selectClientLicensePackage(btn) {
+  const packageId = Number(btn?.dataset?.packageId);
+  const applicationSlug = String(btn?.dataset?.applicationSlug || '').trim();
+  if (!packageId) return;
+  const plan = clientLicenseLastCommercePlans.find((p) => Number(p.package_id) === packageId);
+  closeClientLicensePackagesModal();
+  invalidateClientCommercePlansCache(applicationSlug);
+  await promptClientCheckoutDevices(plan || { package_id: packageId, devices_quota: 1 }, packageId, applicationSlug);
+}
+
+async function openClientLicenseCommerceFromBtn(btn) {
+  if (!btn) return;
+  const slug = String(btn.dataset.applicationSlug || '').trim();
+  const appId = Number(btn.dataset.appId);
+  try {
+    await openClientLicenseCommerceModal(slug, appId);
+  } catch {
+    await showAppAlert('Gagal membuka pilihan paket. Muat ulang halaman lalu coba lagi.', 'Paket lisensi');
+  }
+}
+
+async function openClientLicenseCommerceModal(applicationSlug, appId) {
+  const app = clientLicenseAppsCache.find((row) => Number(row.id) === Number(appId))
+    || { slug: applicationSlug, id: appId, name: '' };
+  const slug = String(applicationSlug || app.slug || '').trim();
+  if (!slug) return;
+
+  const appTitle = String(app.name || 'Aplikasi').trim();
+  clientLicenseCommerceDialogMode = clientLicenseCommerceDialogModeFor(app);
+  const modalTitle = clientLicenseCommerceDialogMode === 'renew'
+    ? 'Perpanjang / Beli paket'
+    : (clientLicenseIsTrialPackage(app) ? 'Beli paket' : 'Upgrade lisensi');
+  const currentPkg = String(app.package?.name || 'saat ini').trim();
+  const modalSubtitle = clientLicenseCommerceDialogMode === 'renew'
+    ? `Lisensi ${currentPkg} expired — perpanjang paket yang sama atau pilih paket lain.`
+    : (clientLicenseIsTrialPackage(app)
+      ? `Pilih paket berbayar untuk ${appTitle}.`
+      : `Paket ${currentPkg} → pilih paket di bawah untuk upgrade.`);
+  if (!openClientLicensePackagesModalShell(modalTitle, modalSubtitle)) return;
+
+  primeClientCheckoutReferralFields();
+
+  const body = document.getElementById('clientLicensePackagesBody');
+  if (body) body.innerHTML = '<div class="client-license-packages-loading">Memuat paket…</div>';
+
+  const { ok, data } = await fetchClientCommercePlans(slug);
+  if (!ok) {
+    if (body) {
+      body.innerHTML = '<p class="client-license-packages-empty">Gagal memuat daftar paket.</p>';
+    }
+    showClientLicensePackagesAlert(data.message || 'Gagal memuat paket.', 'error');
+    return;
+  }
+
+  const plans = Array.isArray(data.plans) ? data.plans : [];
+  clientLicenseLastCommercePlans = plans;
+  const pending = data.pending_order;
+  if (pending?.is_payable) {
+    closeClientLicensePackagesModal();
+    const resume = await openAppDialog({
+      type: 'confirm',
+      title: 'Pembayaran menunggu',
+      message: `Ada pembayaran QRIS untuk ${pending.package_name || 'paket'} (${pending.application_name || app.name || 'aplikasi'}) yang belum selesai. Lanjutkan pembayaran itu?`,
+      okText: 'Lanjutkan bayar',
+      cancelText: 'Pilih paket lain',
+    });
+    if (resume) {
+      await openPendingClientCheckout(pending);
+      return;
+    }
+    if (!openClientLicensePackagesModalShell(modalTitle, appTitle)) return;
+    if (body) body.innerHTML = renderClientLicensePackageOptions(plans, slug, app, clientLicenseCommerceDialogMode);
+    return;
+  }
+
+  if (body) body.innerHTML = renderClientLicensePackageOptions(plans, slug, app, clientLicenseCommerceDialogMode);
+}
+
+let clientLicenseDevicesModalAppId = 0;
+
+function closeClientLicenseDevicesModal() {
+  const modal = document.getElementById('clientLicenseDevicesModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+  modal.classList.remove('open');
+  clientLicenseDevicesModalAppId = 0;
+  if (!document.getElementById('checkoutModal')?.classList.contains('open')
+    && !document.getElementById('clientLicensePackagesModal')?.classList.contains('open')
+    && !document.getElementById('clientReportArchiveModal')?.classList.contains('open')
+    && !document.getElementById('clientLicenseDeviceSlotsModal')?.classList.contains('open')
+    && !document.getElementById('appDialogModal')?.classList.contains('open')
+    && !document.getElementById('authModal')?.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
+}
+
+function openClientLicenseDevicesFromBtn(btn) {
+  closeAllDashActionGearMenus();
+  const appId = Number(btn?.getAttribute('data-app-id') || 0);
+  openClientLicenseDevicesModal(appId);
+}
+
+function openClientLicenseDevicesModal(appId) {
+  const app = clientLicenseAppsCache.find((row) => Number(row.id) === Number(appId));
+  if (!app) return;
+
+  const modal = document.getElementById('clientLicenseDevicesModal');
+  if (!modal) return;
+
+  clientLicenseDevicesModalAppId = Number(appId) || 0;
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  renderClientLicenseDevicesModalContent(app);
+}
+
+function renderClientLicenseDevicesModalSummary(app) {
+  const container = document.getElementById('clientLicenseDevicesModalSummary');
+  if (!container) return;
+
+  const maxDevices = Number(app.devices_max ?? app.package?.devices_quota ?? 0);
+  const activeDevices = Number(app.devices_active ?? (app.devices ? app.devices.length : 0));
+  const remaining = maxDevices > 0 ? Math.max(0, maxDevices - activeDevices) : null;
+
+  const quotaLabel = maxDevices
+    ? `${activeDevices} / ${maxDevices} terpakai`
+    : `${activeDevices} aktif`;
+  const remainingLabel = remaining !== null
+    ? `${remaining} slot tersisa`
+    : 'Kuota mengikuti paket';
+
+  container.innerHTML = `<div class="client-license-devices-stat">
+      <span class="client-license-devices-stat-label">Perangkat aktif</span>
+      <span class="client-license-devices-stat-value">${escapeHtml(quotaLabel)}</span>
+    </div>
+    <div class="client-license-devices-stat">
+      <span class="client-license-devices-stat-label">Sisa kuota</span>
+      <span class="client-license-devices-stat-value">${escapeHtml(remainingLabel)}</span>
+    </div>
+    <div class="client-license-devices-hint">
+      Aktivasi perangkat baru dari aplikasi desktop: <strong>Settings → Lisensi → Activate</strong>.
+    </div>`;
+}
+
+function renderClientLicenseDevicesModalBody(app) {
+  const container = document.getElementById('clientLicenseDevicesModalBody');
+  if (!container) return;
+
+  const devices = app.devices || [];
+  if (!devices.length) {
+    container.innerHTML = `<div class="client-license-devices-empty">
+      <p class="client-license-devices-empty-title">Belum ada perangkat aktif</p>
+      <p class="client-license-devices-empty-text">Buka aplikasi desktop yang sudah dilisensikan, lalu aktifkan dari menu <strong>Settings → Lisensi → Activate</strong>. Perangkat yang terdaftar akan muncul di sini.</p>
+    </div>`;
+    return;
+  }
+
+  const rows = devices.map((device) => renderClientLicenseDeviceRow(app.name, device)).join('');
+  container.innerHTML = `<div class="dash-table-wrap client-license-devices-table-wrap">
+    <table class="dash-table client-license-devices-table">
+      <thead>
+        <tr>
+          <th>Komputer</th>
+          <th>IP</th>
+          <th>Platform</th>
+          <th>Lokasi</th>
+          <th>Diaktifkan</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function renderClientLicenseDevicesModalContent(app) {
+  const titleEl = document.getElementById('clientLicenseDevicesModalTitle');
+  const subtitleEl = document.getElementById('clientLicenseDevicesModalSubtitle');
+  const appName = app?.name || 'Aplikasi';
+  const packageName = app?.package?.name || '—';
+
+  if (titleEl) titleEl.textContent = 'Perangkat teraktivasi';
+  if (subtitleEl) {
+    subtitleEl.textContent = `${appName} · Paket ${packageName}`;
+  }
+
+  renderClientLicenseDevicesModalSummary(app);
+  renderClientLicenseDevicesModalBody(app);
 }
 
 function renderClientLicenseDeviceRow(appName, device) {
@@ -1117,17 +2856,30 @@ function renderClientLicenseAppCard(app) {
   const activeDevices = Number(
     app.devices_active ?? (app.devices ? app.devices.length : 0),
   );
-  const quotaLabel = maxDevices
+  const appId = Number(app.id) || 0;
+  const commerceLabel = clientLicenseCommerceButtonLabel(app);
+  const appSlugAttr = escapeHtml(app.slug || '');
+  const clientLicenseMenuItems = [
+    `<button type="button" class="btn btn-secondary dash-action-gear-menu-item client-license-devices-open" data-app-id="${appId}" onclick="openClientLicenseDevicesFromBtn(this)">Lihat perangkat</button>`,
+    `<button type="button" class="btn btn-secondary dash-action-gear-menu-item client-license-report-archive-btn" data-application-slug="${appSlugAttr}" data-application-name="${appName}" onclick="openClientReportArchiveFromBtn(this)">Password Laporan</button>`,
+  ];
+  if (clientCanAddDeviceSlots(app)) {
+    clientLicenseMenuItems.push(
+      `<button type="button" class="btn btn-secondary dash-action-gear-menu-item client-license-add-device-btn" data-app-id="${appId}" onclick="openClientAddDeviceSlotsFromBtn(this)">Tambah device</button>`,
+    );
+  }
+  if (clientLicenseShowCommerceButton(app)) {
+    clientLicenseMenuItems.push(
+      `<button type="button" class="btn btn-primary dash-action-gear-menu-item client-license-commerce-btn" data-application-slug="${escapeHtml(app.slug || '')}" data-app-id="${appId}" onclick="openClientLicenseCommerceFromBtn(this)">${escapeHtml(commerceLabel)}</button>`,
+    );
+  }
+  const clientLicenseGearMenu = renderDashActionGearMenu(`client-license-gear-${appId}`, clientLicenseMenuItems.join(''));
+  const quotaText = maxDevices
     ? `${activeDevices} / ${maxDevices} aktif`
     : `${activeDevices} aktif`;
   const durationDays = app.package?.duration_days
     ? `${app.package.duration_days} hari`
     : '—';
-
-  const devices = app.devices || [];
-  const deviceBody = devices.length
-    ? devices.map((device) => renderClientLicenseDeviceRow(app.name, device)).join('')
-    : `<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:20px;">Belum ada perangkat aktif. Aktivasi dari aplikasi desktop: Settings → Lisensi → Activate.</td></tr>`;
 
   return `<article class="client-license-app-card">
     <header class="client-license-app-head">
@@ -1140,6 +2892,7 @@ function renderClientLicenseAppCard(app) {
       <span class="badge ${badgeClass}">${escapeHtml(statusLabel)}</span>
     </header>
     <div class="client-license-app-meta">
+      <div class="client-license-meta-main">
       <div class="client-license-meta-item">
         <div class="client-license-meta-label">Dibeli / mulai</div>
         <div class="client-license-meta-value">${formatClientDateOnly(app.purchased_at)}</div>
@@ -1158,33 +2911,24 @@ function renderClientLicenseAppCard(app) {
       </div>
       <div class="client-license-meta-item">
         <div class="client-license-meta-label">Kuota perangkat</div>
-        <div class="client-license-meta-value">${escapeHtml(quotaLabel)}</div>
+        <div class="client-license-meta-value">${escapeHtml(quotaText)}</div>
+      </div>
+      <div class="client-license-meta-item client-license-meta-item--actions">
+        <div class="client-license-meta-label">Aksi</div>
+        <div class="client-license-meta-value client-license-actions">
+          ${clientLicenseGearMenu}
+        </div>
+      </div>
       </div>
     </div>
-    <section class="client-license-devices">
-      <div class="client-license-devices-head">Perangkat teraktivasi</div>
-      <div class="dash-table-wrap">
-        <table class="dash-table">
-          <thead>
-            <tr>
-              <th>Komputer</th>
-              <th>IP</th>
-              <th>Platform</th>
-              <th>Lokasi</th>
-              <th>Diaktifkan</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody>${deviceBody}</tbody>
-        </table>
-      </div>
-    </section>
   </article>`;
 }
 
 function renderClientLicenseApplications(applications) {
   const container = document.getElementById('clientLicenseApps');
   if (!container) return;
+
+  clientLicenseAppsCache = Array.isArray(applications) ? applications : [];
 
   if (!applications.length) {
     container.innerHTML = `<div class="client-license-empty dash-form-card">
@@ -1303,13 +3047,20 @@ function hydrateClientOverviewFromBoot() {
   renderClientOverviewDashboard(bootInitialClientLicense);
 }
 
-async function loadClientOverview() {
+async function loadClientOverview(options = {}) {
+  const { background = false, force = false } = options;
   const overview = document.getElementById('client-overview');
   if (!overview?.classList.contains('active')) return;
 
   const appsGrid = document.getElementById('clientOverviewAppsGrid');
   const hadCards = !!appsGrid?.querySelector('.client-overview-app-card');
-  if (appsGrid && !hadCards) {
+
+  if (!force && !background && clientLicenseSnapshot) {
+    renderClientOverviewDashboard(clientLicenseSnapshot);
+    return;
+  }
+
+  if (appsGrid && !hadCards && !background) {
     appsGrid.innerHTML = '<div class="client-overview-loading">Memuat…</div>';
   }
 
@@ -1319,26 +3070,32 @@ async function loadClientOverview() {
       credentials: 'same-origin',
     });
     if (!response.ok) {
-      if (appsGrid && !hadCards) {
+      if (appsGrid && !hadCards && !background) {
         appsGrid.innerHTML = '<div class="client-overview-empty dash-form-card">Gagal memuat data lisensi. Muat ulang halaman.</div>';
       }
       return;
     }
     const data = await response.json();
-    renderClientOverviewDashboard(data.license || {});
+    clientLicenseSnapshot = data.license || {};
+    renderClientOverviewDashboard(clientLicenseSnapshot);
   } catch {
-    if (appsGrid && !hadCards) {
+    if (appsGrid && !hadCards && !background) {
       appsGrid.innerHTML = '<div class="client-overview-empty dash-form-card">Gagal memuat data lisensi. Periksa koneksi lalu muat ulang.</div>';
     }
   }
 }
 
 async function loadClientLicense(options = {}) {
-  const { background = false } = options;
+  const { background = false, force = false } = options;
   const appsEl = document.getElementById('clientLicenseApps');
   if (!appsEl) return;
 
   const hadContent = !!appsEl.querySelector('.client-license-app-card, .client-license-empty');
+
+  if (!force && !background && clientLicenseSnapshot?.applications) {
+    renderClientLicenseApplications(clientLicenseSnapshot.applications);
+    return;
+  }
 
   if (!background) {
     appsEl.innerHTML = '<div class="client-license-loading">Memuat…</div>';
@@ -1358,10 +3115,14 @@ async function loadClientLicense(options = {}) {
       return;
     }
 
-    const license = data.license || {};
-    const applications = license.applications || [];
+    clientLicenseSnapshot = data.license || {};
+    const applications = clientLicenseSnapshot.applications || [];
 
     renderClientLicenseApplications(applications);
+    if (clientLicenseDevicesModalAppId) {
+      const app = clientLicenseAppsCache.find((row) => Number(row.id) === Number(clientLicenseDevicesModalAppId));
+      if (app) renderClientLicenseDevicesModalContent(app);
+    }
   } catch {
     if (!background) {
       appsEl.innerHTML = '<div class="client-license-empty">Gagal memuat.</div>';
@@ -1371,54 +3132,55 @@ async function loadClientLicense(options = {}) {
   }
 }
 
-function openPendingClientCheckout(order) {
-  if (!order?.order_id) return;
-  renderCheckoutPayment(
-    {
-      order_id: order.order_id,
-      package: { name: order.package_name || '—' },
-      amount_label: order.amount_label,
-      expires_at_label: order.expires_at_label,
-      payment_page_url: order.payment_page_url,
-      simulate_available: order.simulate_available,
-    },
-    'Selesaikan pembayaran yang masih pending.',
-  );
+async function openPendingClientCheckout(order) {
+  if (!order?.order_id || !clientBillingOrderIsPayable(order)) return;
+  try {
+    const response = await fetch(`${clientCheckoutStatusUrl}/${encodeURIComponent(order.order_id)}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    if (!response.ok || data.status !== 'success') {
+      await showAppAlert(data.message || 'Pembayaran tidak ditemukan.', 'Checkout');
+      loadClientBilling();
+      return;
+    }
+    const payment = data.payment;
+    if (!payment || payment.status !== 'pending') {
+      await showAppAlert('QRIS ini sudah tidak aktif. Buat pembayaran baru dari aplikasi.', 'Checkout');
+      loadClientBilling();
+      return;
+    }
+    renderCheckoutPayment(payment, 'Selesaikan pembayaran yang masih pending.');
+  } catch {
+    await showAppAlert('Gagal memuat data pembayaran.', 'Checkout');
+  }
 }
 
-function openPendingClientCheckoutByIndex(index) {
-  const order = clientBillingPendingCache[Number(index)];
+function setClientBillingPendingCache(orders) {
+  clientBillingPendingCache = Array.isArray(orders) ? orders : [];
+}
+
+function clientBillingSortTimestamp(item) {
+  const raw = item?.sort_at || item?.paid_at_iso || item?.created_at || item?.expires_at || '';
+  const ms = new Date(raw).getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+function openPendingClientCheckoutByOrderId(orderId) {
+  const order = clientBillingPendingCache.find((row) => row.order_id === orderId);
   if (order) openPendingClientCheckout(order);
 }
 
-function renderClientBillingPendingOrders(orders) {
-  const wrap = document.getElementById('clientBillingPending');
-  if (!wrap) return;
-
-  clientBillingPendingCache = orders;
-
-  if (!orders.length) {
-    wrap.hidden = true;
-    wrap.innerHTML = '';
-    return;
+function clientBillingOrderIsPayable(order) {
+  if (!order || order.status !== 'pending') return false;
+  if (order.is_payable === false) return false;
+  const raw = order.expires_at;
+  if (raw) {
+    const expiresMs = new Date(raw).getTime();
+    if (!Number.isNaN(expiresMs) && expiresMs <= Date.now()) return false;
   }
-
-  wrap.hidden = false;
-  wrap.innerHTML = `
-    <div class="dash-form-card client-billing-pending">
-      <h3>Pembayaran belum selesai</h3>
-      <ul class="client-billing-pending-list">
-        ${orders.map((order, index) => `
-          <li class="client-billing-pending-item">
-            <div>
-              <strong>${escapeHtml(order.application_name || 'Aplikasi')} — ${escapeHtml(order.package_name || 'Paket')}</strong>
-              <span class="client-billing-pending-meta">${escapeHtml(order.amount_label || '')}${order.expires_at_label ? ` · Kedaluwarsa ${escapeHtml(order.expires_at_label)}` : ''}</span>
-            </div>
-            <button type="button" class="btn btn-primary btn-sm" onclick="openPendingClientCheckoutByIndex(${index})">Lanjutkan bayar</button>
-          </li>
-        `).join('')}
-      </ul>
-    </div>`;
+  return true;
 }
 
 async function loadClientBilling() {
@@ -1428,7 +3190,7 @@ async function loadClientBilling() {
 
   if (countEl) countEl.textContent = 'Memuat…';
   tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
-  renderClientBillingPendingOrders([]);
+  setClientBillingPendingCache([]);
 
   try {
     const response = await fetch(clientTransactionsUrl, {
@@ -1443,25 +3205,63 @@ async function loadClientBilling() {
       return;
     }
 
-    renderClientBillingPendingOrders(data.pending_orders || []);
-
+    const pendingOrders = data.pending_orders || [];
+    setClientBillingPendingCache(pendingOrders);
     const transactions = data.transactions || [];
+    const totalRows = pendingOrders.length + transactions.length;
 
     if (countEl) {
-      countEl.textContent = transactions.length
-        ? `${transactions.length} transaksi tercatat`
+      countEl.textContent = totalRows
+        ? `${totalRows} transaksi tercatat`
         : 'Belum ada transaksi';
     }
 
-    if (!transactions.length) {
+    if (!totalRows) {
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada riwayat pembayaran.</td></tr>';
       return;
     }
 
-    tbody.innerHTML = transactions.map((trx) => {
+    const billingRows = [
+      ...pendingOrders.map((order) => ({
+        kind: 'pending',
+        sort_at: order.created_at || order.expires_at,
+        order,
+      })),
+      ...transactions.map((trx) => ({
+        kind: 'paid',
+        sort_at: trx.paid_at_iso || trx.paid_at,
+        trx,
+      })),
+    ].sort((a, b) => clientBillingSortTimestamp(b) - clientBillingSortTimestamp(a));
+
+    tbody.innerHTML = billingRows.map((row) => {
+      if (row.kind === 'pending') {
+        const order = row.order;
+        const desc = order.description
+          || `${order.application_name || 'Aplikasi'} — ${order.package_name || 'Paket'}`;
+        const dateLabel = order.created_at_label || order.expires_at_label || '—';
+        const payable = clientBillingOrderIsPayable(order);
+        const statusLabel = payable ? 'Menunggu bayar' : (order.status_label || 'Expired');
+        const badge = payable ? 'badge-pending' : 'badge-expired';
+        const orderId = escapeHtml(order.order_id || '');
+        const payBtn = payable
+          ? `<button type="button" class="btn btn-primary btn-sm client-billing-pay-btn" onclick="openPendingClientCheckoutByOrderId('${orderId}')">Lanjutkan bayar</button>`
+          : '';
+        return `<tr class="client-billing-row-pending${payable ? '' : ' is-expired'}">
+          <td class="td-mono">${orderId || '—'}</td>
+          <td>${escapeHtml(desc)}</td>
+          <td class="td-green">${escapeHtml(order.amount_label || '—')}</td>
+          <td>${escapeHtml(dateLabel)}</td>
+          <td class="client-billing-status-cell">
+            <span class="badge ${badge}">${escapeHtml(statusLabel)}</span>
+            ${payBtn}
+          </td>
+        </tr>`;
+      }
+
+      const trx = row.trx;
       const badge = adminTransactionStatusBadge(trx.status);
       const statusLabel = trx.status_label || trx.status || '—';
-
       return `<tr>
         <td class="td-mono">${escapeHtml(trx.invoice || '—')}</td>
         <td>${escapeHtml(trx.description || '—')}</td>
@@ -1526,7 +3326,8 @@ function closeAppDialog(result) {
     modal.setAttribute('aria-hidden', 'true');
   }
   if (!document.getElementById('authModal')?.classList.contains('open')
-    && !document.getElementById('checkoutModal')?.classList.contains('open')) {
+    && !document.getElementById('checkoutModal')?.classList.contains('open')
+    && !document.getElementById('clientLicensePackagesModal')?.classList.contains('open')) {
     document.body.style.overflow = '';
   }
   if (appDialogResolver) {
@@ -1583,7 +3384,11 @@ async function deactivateClientDevice(deviceId, btn) {
       return;
     }
 
-    await loadClientLicense();
+    await loadClientLicense({ force: true });
+    if (clientLicenseDevicesModalAppId) {
+      const app = clientLicenseAppsCache.find((row) => Number(row.id) === Number(clientLicenseDevicesModalAppId));
+      if (app) renderClientLicenseDevicesModalContent(app);
+    }
   } catch {
     await showAppAlert('Tidak dapat menghubungi server.');
     if (btn) {
@@ -1598,6 +3403,26 @@ async function restoreClientSession(options = {}) {
 
   if (bootInitialClient) {
     updateClientDashboard(bootInitialClient);
+  }
+
+  if (appMode === 'client' && bootInitialClient) {
+    if (redirectToDashboard) {
+      showClientDashboard(false);
+    }
+    fetch(clientMeUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        if (!data.logged_in) {
+          window.location.href = `${landingUrl}?login=client`;
+          return;
+        }
+        if (data.client) updateClientDashboard(data.client);
+      })
+      .catch(() => {});
+    return true;
   }
 
   try {
@@ -1733,6 +3558,7 @@ function applyDashboardRoute(portal, page) {
   if (portal === 'client' && page === 'affiliate-overview') loadClientAffiliate(clientAffiliatePage);
   if (portal === 'admin' && (page === 'users' || page === 'clients')) refreshAdminUsersTable();
   if (portal === 'admin' && page === 'affiliates') refreshAdminAffiliatesTable();
+  if (portal === 'admin' && page === 'promo-vouchers') refreshAdminPromoVouchersTable();
   if (portal === 'admin' && page === 'commissions') refreshAdminCommissionsTable();
   if (portal === 'admin' && page === 'applications') refreshAdminApplicationsTable();
   if (portal === 'admin' && page === 'licenses') {
@@ -1742,8 +3568,11 @@ function applyDashboardRoute(portal, page) {
     });
   }
   if (portal === 'admin' && page === 'transactions') {
-    refreshAdminTransactionsTable();
-    if (adminTransactionsActiveTab === 'invoices') refreshAdminPaymentOrdersTable();
+    adminTransactionsLedgerPage = 1;
+    adminTransactionsLedgerStatus = 'all';
+    syncAdminTransactionsLedgerFilterButtons();
+    loadAdminTransactionsLedgerPage(1);
+    if (adminTransactionsActiveTab === 'invoices') loadAdminPaymentOrdersPage(1);
   }
   if (portal === 'admin' && page === 'overview') renderRevenueBars();
   if (portal === 'admin' && page === 'homepage') refreshAdminHomepage();
@@ -1825,6 +3654,7 @@ async function initAppState() {
       }
       showAdminLoginGate(false);
       applyDashboardRoute('admin', resolveDashboardPage('admin'));
+      return;
     }
   } finally {
     finishAppBoot();
@@ -2025,6 +3855,16 @@ function doLogin() {
 }
 
 async function doLogout() {
+  const confirmed = await openAppDialog({
+    type: 'confirm',
+    title: 'Keluar',
+    message: 'Yakin ingin logout dari akun Anda?',
+    okText: 'Logout',
+    cancelText: 'Batal',
+    danger: true,
+  });
+  if (!confirmed) return;
+
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 
   try {
@@ -2231,14 +4071,17 @@ async function refreshAdminClientsCache() {
 }
 
 async function refreshAdminUsersTable(options = {}) {
-  const { force = false, cacheOnly = false } = options;
+  const { force = false } = options;
   const tbody = document.getElementById('adminUsersTableBody');
   if (!tbody) return;
 
   const hasServerRows = !!tbody.querySelector('tr[data-user-id]');
-  if (!force && hasServerRows && !cacheOnly) {
-    await refreshAdminUsersTable({ cacheOnly: true });
+  if (!force && hasServerRows) {
     return;
+  }
+
+  if (!hasServerRows && !tbody.querySelector('.admin-table-loading')) {
+    tbody.innerHTML = '<tr class="admin-table-loading"><td colspan="9" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
   }
 
   try {
@@ -2253,13 +4096,7 @@ async function refreshAdminUsersTable(options = {}) {
     }
 
     adminUsersCache = data.users || [];
-    if (cacheOnly) {
-      await refreshAdminClientsCache();
-      return;
-    }
-
     renderAdminUsersRows(adminUsersCache);
-    await refreshAdminClientsCache();
   } catch {
     // Biarkan data server-side jika request gagal.
   }
@@ -2378,7 +4215,7 @@ function setAdminClientModalLayout(mode) {
   const side = modal.querySelector('.admin-app-side');
   if (side) side.hidden = isUserOnly;
 
-  modal.querySelectorAll('.admin-app-nav-item[data-panel="applications"], .admin-app-nav-item[data-panel="affiliate"]').forEach((el) => {
+  modal.querySelectorAll('.admin-app-nav-item[data-panel="affiliate"]').forEach((el) => {
     el.hidden = isUserOnly;
   });
 }
@@ -2503,7 +4340,47 @@ function clearAdminLoginAlert() {
   }
 }
 
+function applyBootAdminSession() {
+  if (!bootInitialAdmin) return false;
+  adminSession = {
+    id: bootInitialAdmin.id,
+    name: bootInitialAdmin.name,
+    email: bootInitialAdmin.email,
+    role: bootInitialAdmin.role,
+    is_super_admin: bootInitialAdmin.is_super_admin,
+  };
+  return true;
+}
+
+function verifyAdminSessionInBackground() {
+  fetch(adminMeUrl, {
+    headers: { Accept: 'application/json' },
+    credentials: 'same-origin',
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (!data.logged_in || !data.admin) {
+        adminSession = null;
+        showAdminLoginGate(true);
+        return;
+      }
+      adminSession = {
+        id: data.admin.id,
+        name: data.admin.name,
+        email: data.admin.email,
+        role: data.admin.role,
+        is_super_admin: data.admin.is_super_admin,
+      };
+    })
+    .catch(() => {});
+}
+
 async function restoreAdminSession() {
+  if (appMode === 'admin' && applyBootAdminSession()) {
+    verifyAdminSessionInBackground();
+    return true;
+  }
+
   try {
     const response = await fetch(adminMeUrl, {
       headers: { Accept: 'application/json' },
@@ -2638,14 +4515,17 @@ function renderAdminAffiliatesRows(affiliates) {
 }
 
 async function refreshAdminAffiliatesTable(options = {}) {
-  const { force = false, cacheOnly = false } = options;
+  const { force = false } = options;
   const tbody = document.getElementById('adminAffiliatesTableBody');
   if (!tbody) return;
 
   const hasServerRows = !!tbody.querySelector('tr[data-affiliate-id]');
-  if (!force && hasServerRows && !cacheOnly) {
-    await refreshAdminAffiliatesTable({ cacheOnly: true });
+  if (!force && hasServerRows) {
     return;
+  }
+
+  if (!hasServerRows && !tbody.querySelector('.admin-table-loading')) {
+    tbody.innerHTML = '<tr class="admin-table-loading"><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
   }
 
   try {
@@ -2660,14 +4540,34 @@ async function refreshAdminAffiliatesTable(options = {}) {
     }
 
     adminAffiliatesCache = data.affiliates || [];
-    if (cacheOnly) {
-      return;
-    }
-
     renderAdminAffiliatesRows(adminAffiliatesCache);
   } catch {
     // Biarkan data server-side jika request gagal.
   }
+}
+
+function adminVoucherCodeCell(item) {
+  const code = item?.voucher_code || item?.referral_code;
+  if (!code) {
+    return '<span style="color:var(--text-3);font-size:11px;">—</span>';
+  }
+
+  let kind = item?.voucher_kind;
+  if (!kind && (item?.affiliate_id || item?.affiliate_name)) {
+    kind = 'affiliate';
+  }
+
+  let label = code;
+  let extraClass = '';
+  if (kind === 'promo') {
+    label = `${code} (promo)`;
+    extraClass = ' admin-voucher-code-text--promo';
+  } else if (kind === 'affiliate') {
+    label = `${code} (affiliate)`;
+    extraClass = ' admin-voucher-code-text--affiliate';
+  }
+
+  return `<span class="admin-voucher-code-text${extraClass}">${escapeHtml(label)}</span>`;
 }
 
 function renderAdminCommissionsRows(commissions = [], summary = {}) {
@@ -2687,7 +4587,7 @@ function renderAdminCommissionsRows(commissions = [], summary = {}) {
   if (!tbody) return;
 
   if (!commissions.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:24px;">Belum ada komisi affiliate.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px;">Belum ada komisi affiliate.</td></tr>';
     return;
   }
 
@@ -2698,9 +4598,11 @@ function renderAdminCommissionsRows(commissions = [], summary = {}) {
     const actionCell = isPaid
       ? ''
       : `<button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:11px;" onclick="payAdminCommission(${item.id})">Bayar</button>`;
+    const affiliateCell = escapeHtml(item.affiliate_name || item.affiliate_code || '—');
 
     return `<tr data-commission-id="${item.id}">
-      <td class="td-mono">${escapeHtml(item.affiliate_code || '—')}</td>
+      <td class="td-bold">${affiliateCell}</td>
+      <td>${adminVoucherCodeCell(item)}</td>
       <td>${escapeHtml(item.client_name || '—')}</td>
       <td>${escapeHtml(item.package_name || '—')}</td>
       <td class="${amountClass}">${escapeHtml(item.commission_label || '—')}</td>
@@ -2723,13 +4625,13 @@ async function refreshAdminCommissionsTable() {
     const data = await response.json();
 
     if (!response.ok) {
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--rose);padding:24px;">Gagal memuat data komisi.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--rose);padding:24px;">Gagal memuat data komisi.</td></tr>';
       return;
     }
 
     renderAdminCommissionsRows(data.commissions || [], data.summary || {});
   } catch {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--rose);padding:24px;">Gagal memuat data komisi.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--rose);padding:24px;">Gagal memuat data komisi.</td></tr>';
   }
 }
 
@@ -2964,6 +4866,11 @@ async function openAdminAffiliateTransactionsModal(affiliateId) {
   const affiliate = getAdminAffiliateFromDom(affiliateId);
   if (!affiliate) return;
 
+  adminAffiliateTrxModalId = affiliateId;
+  adminAffiliateTrxPage = 1;
+  adminAffiliateTrxStatus = 'all';
+  syncAdminAffiliateTrxFilterButtons();
+
   const titleEl = document.getElementById('adminAffiliateTransactionsTitle');
   const subtitleEl = document.getElementById('adminAffiliateTransactionsSubtitle');
   if (titleEl) titleEl.textContent = `Transaksi Referral — ${affiliate.code || '—'}`;
@@ -2973,26 +4880,69 @@ async function openAdminAffiliateTransactionsModal(affiliateId) {
       : 'Daftar transaksi dari kode affiliate';
   }
 
-  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
+  await loadAdminAffiliateTransactionsPage(1);
+}
+
+function syncAdminAffiliateTrxFilterButtons() {
+  document.querySelectorAll('#adminAffiliateTrxFilters .admin-affiliate-trx-filter').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.status === adminAffiliateTrxStatus);
+  });
+}
+
+function setAdminAffiliateTrxStatusFilter(status) {
+  adminAffiliateTrxStatus = status;
+  syncAdminAffiliateTrxFilterButtons();
+  loadAdminAffiliateTransactionsPage(1);
+}
+
+async function loadAdminAffiliateTransactionsPage(page = adminAffiliateTrxPage) {
+  const tbody = document.getElementById('adminAffiliateTransactionsBody');
+  const affiliateId = adminAffiliateTrxModalId;
+  if (!tbody || !affiliateId) return;
+
+  adminAffiliateTrxPage = Math.max(1, page);
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
+
+  const params = new URLSearchParams({
+    page: String(adminAffiliateTrxPage),
+    per_page: String(ADMIN_TRX_DETAIL_PER_PAGE),
+    status: adminAffiliateTrxStatus,
+  });
 
   try {
-    const response = await fetch(`${adminAffiliatesUrl}/${affiliateId}/transactions`, {
+    const response = await fetch(`${adminAffiliatesUrl}/${affiliateId}/transactions?${params}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     });
     const data = await response.json();
 
     if (!response.ok) {
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi affiliate.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi affiliate.</td></tr>';
+      renderDashPagination('adminAffiliateTrxPagination', null, 'loadAdminAffiliateTransactionsPage');
       return;
     }
 
+    if (data.status_filter) {
+      adminAffiliateTrxStatus = data.status_filter;
+      syncAdminAffiliateTrxFilterButtons();
+    }
+
     renderAdminAffiliateTransactionsSummary(data.summary || {});
-    renderAdminAffiliateTransactionsRows(data.transactions || []);
+    renderAdminAffiliateTransactionsRows(data.transactions || [], adminAffiliateTrxStatus);
+
+    const metaEl = document.getElementById('adminAffiliateTrxTableMeta');
+    const p = data.pagination;
+    if (metaEl) {
+      metaEl.textContent = p?.total
+        ? `Menampilkan ${p.from ?? 0}–${p.to ?? 0} dari ${p.total} transaksi`
+        : '';
+    }
+    renderDashPagination('adminAffiliateTrxPagination', p, 'loadAdminAffiliateTransactionsPage');
   } catch {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi affiliate.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi affiliate.</td></tr>';
+    renderDashPagination('adminAffiliateTrxPagination', null, 'loadAdminAffiliateTransactionsPage');
   }
 }
 
@@ -3001,6 +4951,7 @@ function closeAdminAffiliateTransactionsModal() {
   if (!modal) return;
   modal.classList.remove('open');
   document.body.style.overflow = '';
+  adminAffiliateTrxModalId = null;
 }
 
 function renderAdminAffiliateTransactionsSummary(summary) {
@@ -3017,32 +4968,33 @@ function renderAdminAffiliateTransactionsSummary(summary) {
   }
 }
 
-function renderAdminAffiliateTransactionsRows(transactions) {
+function renderAdminAffiliateTransactionsRows(transactions, statusFilter = 'all') {
   const tbody = document.getElementById('adminAffiliateTransactionsBody');
   if (!tbody) return;
 
   if (!transactions.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada transaksi dari kode affiliate ini.</td></tr>';
+    const emptyMsg = statusFilter === 'all'
+      ? 'Belum ada transaksi dari kode affiliate ini.'
+      : 'Tidak ada transaksi untuk filter ini.';
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">${emptyMsg}</td></tr>`;
     return;
   }
 
   tbody.innerHTML = transactions.map((trx) => {
     const badge = adminPaymentOrderStatusBadge(trx.status);
     const statusLabel = trx.status_label || trx.status || '—';
-    const packageLabel = [trx.application_name, trx.package_name].filter(Boolean).join(' · ') || '—';
+    const description = trx.description
+      || [trx.application_name, trx.package_name, trx.type_label || trx.type].filter(Boolean).join(' · ')
+      || '—';
     const dateLabel = trx.paid_at_date || trx.paid_at || trx.created_at || '—';
 
     return `<tr>
       <td class="td-mono">
         <span class="cell-main">${escapeHtml(trx.reference || trx.order_id || '—')}</span>
-        <span class="cell-sub">${escapeHtml(trx.referral_code || '—')}</span>
+        <span class="cell-sub">${escapeHtml(trx.voucher_code || trx.referral_code || '—')}</span>
       </td>
-      <td class="td-bold">
-        <span class="cell-main">${escapeHtml(trx.customer_name || '—')}</span>
-        <span class="cell-sub">${escapeHtml(trx.customer_email || '—')}</span>
-      </td>
-      <td>${escapeHtml(packageLabel)}</td>
-      <td>${escapeHtml(trx.type_label || trx.type || '—')}</td>
+      <td class="td-bold">${escapeHtml(trx.customer_name || '—')}</td>
+      <td>${escapeHtml(description)}</td>
       <td class="td-green">${escapeHtml(trx.amount_label || formatAdminCurrency(trx.amount))}</td>
       <td class="td-amber">${escapeHtml(trx.commission_label || (trx.commission_amount ? formatAdminCurrency(trx.commission_amount) : '—'))}</td>
       <td><span class="badge ${badge}">${escapeHtml(statusLabel)}</span></td>
@@ -3082,6 +5034,353 @@ async function deleteAdminAffiliate(affiliateId) {
     await refreshAdminAffiliatesTable({ force: true });
   } catch {
     await showAppAlert('Terjadi kesalahan jaringan. Silakan coba lagi.');
+  }
+}
+
+function adminPromoVoucherStatusBadge(status) {
+  return status === 'active' ? 'badge-active' : 'badge-expired';
+}
+
+function adminPromoVoucherStatusLabel(status) {
+  return status === 'active' ? 'Active' : 'Inactive';
+}
+
+function renderAdminPromoVouchersRows(vouchers) {
+  const tbody = document.getElementById('adminPromoVouchersTableBody');
+  const countEl = document.getElementById('adminPromoVouchersCount');
+  if (!tbody) return;
+
+  adminPromoVouchersCache = vouchers;
+
+  if (countEl) {
+    countEl.textContent = `${vouchers.length} voucher promo`;
+  }
+
+  if (!vouchers.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada voucher promo.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = vouchers.map((voucher) => {
+    const badge = adminPromoVoucherStatusBadge(voucher.status);
+    const label = adminPromoVoucherStatusLabel(voucher.status);
+    return `<tr data-promo-voucher-id="${voucher.id}">
+      <td class="td-mono td-bold">${escapeHtml(voucher.code || '—')}</td>
+      <td>${escapeHtml(voucher.label || '—')}</td>
+      <td>${escapeHtml(voucher.application_scope_label || '—')}</td>
+      <td>${escapeHtml(voucher.discount_percent_label || '—')}</td>
+      <td>${escapeHtml(String(voucher.paid_usage_count ?? 0))}</td>
+      <td><span class="badge ${badge}">${escapeHtml(label)}</span></td>
+      <td>
+        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;margin-right:4px;" onclick="openAdminPromoVoucherUsagesModal(${voucher.id})">Detail</button>
+        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;margin-right:4px;" onclick="openAdminPromoVoucherModal(${voucher.id})">Edit</button>
+        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:11px;color:var(--rose);" onclick="deleteAdminPromoVoucher(${voucher.id})">Hapus</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function refreshAdminPromoVouchersTable(options = {}) {
+  const tbody = document.getElementById('adminPromoVouchersTableBody');
+  if (!tbody) return;
+
+  if (!options.force && adminPromoVouchersCache.length) {
+    renderAdminPromoVouchersRows(adminPromoVouchersCache);
+    return;
+  }
+
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
+
+  try {
+    const response = await fetch(adminPromoVouchersUrl, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat voucher.</td></tr>';
+      return;
+    }
+    renderAdminPromoVouchersRows(data.vouchers || []);
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat voucher.</td></tr>';
+  }
+}
+
+function populateAdminPromoVoucherApplicationSelect(selectedId = '') {
+  const select = document.getElementById('adminPromoVoucherApplication');
+  if (!select) return;
+  const selected = selectedId === '' || selectedId == null ? '' : String(selectedId);
+  select.innerHTML = '<option value="">Semua aplikasi</option>'
+    + adminApplicationsCache.map((app) => `<option value="${app.id}"${String(app.id) === selected ? ' selected' : ''}>${escapeHtml(app.name || app.slug || 'App')}</option>`).join('');
+}
+
+function getAdminPromoVoucherFromCache(id) {
+  return adminPromoVouchersCache.find((item) => Number(item.id) === Number(id)) || null;
+}
+
+function showAdminPromoVoucherAlert(message, type = 'error') {
+  const alert = document.getElementById('adminPromoVoucherAlert');
+  if (!alert) return;
+  alert.hidden = false;
+  alert.textContent = message;
+  alert.className = `admin-app-alert is-${type}`;
+}
+
+function clearAdminPromoVoucherAlert() {
+  const alert = document.getElementById('adminPromoVoucherAlert');
+  if (!alert) return;
+  alert.hidden = true;
+  alert.textContent = '';
+}
+
+async function openAdminPromoVoucherModal(voucherId = null) {
+  const modal = document.getElementById('adminPromoVoucherModal');
+  if (!modal) return;
+
+  if (!adminApplicationsCache.length) {
+    await refreshAdminApplicationsTable({ force: true });
+  }
+
+  clearAdminPromoVoucherAlert();
+  const voucher = voucherId ? getAdminPromoVoucherFromCache(voucherId) : null;
+  const isEdit = !!voucher;
+
+  document.getElementById('adminPromoVoucherId').value = voucher?.id || '';
+  document.getElementById('adminPromoVoucherModalTitle').textContent = isEdit ? 'Edit Voucher' : 'Tambah Voucher';
+  document.getElementById('adminPromoVoucherCode').value = voucher?.code || '';
+  document.getElementById('adminPromoVoucherLabel').value = voucher?.label || '';
+  document.getElementById('adminPromoVoucherDiscount').value = voucher?.discount_percent ?? '';
+  document.getElementById('adminPromoVoucherStatus').value = voucher?.status || 'active';
+  populateAdminPromoVoucherApplicationSelect(voucher?.application_id ?? '');
+  document.getElementById('adminPromoVoucherSubmitBtn').textContent = isEdit ? 'Simpan Perubahan' : 'Simpan';
+
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAdminPromoVoucherModal() {
+  const modal = document.getElementById('adminPromoVoucherModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  if (!document.getElementById('appDialogModal')?.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
+}
+
+async function submitAdminPromoVoucherForm(event) {
+  event.preventDefault();
+  clearAdminPromoVoucherAlert();
+
+  const id = document.getElementById('adminPromoVoucherId')?.value?.trim();
+  const isEdit = !!id;
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const submitBtn = document.getElementById('adminPromoVoucherSubmitBtn');
+  const appRaw = document.getElementById('adminPromoVoucherApplication')?.value;
+
+  const payload = {
+    code: document.getElementById('adminPromoVoucherCode')?.value?.trim() || '',
+    label: document.getElementById('adminPromoVoucherLabel')?.value?.trim() || null,
+    application_id: appRaw ? Number(appRaw) : null,
+    discount_percent: Number(document.getElementById('adminPromoVoucherDiscount')?.value || 0),
+    status: document.getElementById('adminPromoVoucherStatus')?.value || 'active',
+  };
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Menyimpan…';
+  }
+
+  try {
+    const response = await fetch(isEdit ? `${adminPromoVouchersUrl}/${id}` : adminPromoVouchersUrl, {
+      method: isEdit ? 'PUT' : 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const msg = data.errors?.code?.[0] || data.message || 'Gagal menyimpan voucher.';
+      showAdminPromoVoucherAlert(msg);
+      return;
+    }
+
+    closeAdminPromoVoucherModal();
+    await refreshAdminPromoVouchersTable({ force: true });
+  } catch {
+    showAdminPromoVoucherAlert('Terjadi kesalahan jaringan.');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = isEdit ? 'Simpan Perubahan' : 'Simpan';
+    }
+  }
+}
+
+async function openAdminPromoVoucherUsagesModal(voucherId) {
+  const modal = document.getElementById('adminPromoVoucherUsagesModal');
+  const tbody = document.getElementById('adminPromoVoucherUsagesBody');
+  if (!modal || !tbody) return;
+
+  if (!getAdminPromoVoucherFromCache(voucherId)) {
+    await refreshAdminPromoVouchersTable({ force: true });
+  }
+
+  const voucher = getAdminPromoVoucherFromCache(voucherId);
+  if (!voucher) return;
+
+  adminPromoVoucherUsagesModalId = voucherId;
+  adminPromoVoucherUsagesPage = 1;
+  adminPromoVoucherUsagesStatus = 'all';
+  syncAdminPromoVoucherUsagesFilterButtons();
+
+  document.getElementById('adminPromoVoucherUsagesTitle').textContent = `Pemakaian — ${voucher.code || '—'}`;
+  document.getElementById('adminPromoVoucherUsagesSubtitle').textContent = voucher.label
+    ? `${voucher.label} · diskon ${voucher.discount_percent_label || '—'}`
+    : `Diskon ${voucher.discount_percent_label || '—'}`;
+
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  await loadAdminPromoVoucherUsagesPage(1);
+}
+
+function syncAdminPromoVoucherUsagesFilterButtons() {
+  document.querySelectorAll('#adminPromoVoucherUsagesFilters .admin-affiliate-trx-filter').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.status === adminPromoVoucherUsagesStatus);
+  });
+}
+
+function setAdminPromoVoucherUsagesStatusFilter(status) {
+  adminPromoVoucherUsagesStatus = status;
+  syncAdminPromoVoucherUsagesFilterButtons();
+  loadAdminPromoVoucherUsagesPage(1);
+}
+
+async function loadAdminPromoVoucherUsagesPage(page = adminPromoVoucherUsagesPage) {
+  const tbody = document.getElementById('adminPromoVoucherUsagesBody');
+  const voucherId = adminPromoVoucherUsagesModalId;
+  if (!tbody || !voucherId) return;
+
+  adminPromoVoucherUsagesPage = Math.max(1, page);
+  tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
+
+  const params = new URLSearchParams({
+    page: String(adminPromoVoucherUsagesPage),
+    per_page: String(ADMIN_TRX_DETAIL_PER_PAGE),
+    status: adminPromoVoucherUsagesStatus,
+  });
+
+  try {
+    const response = await fetch(`${adminPromoVouchersUrl}/${voucherId}/usages?${params}`, {
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat pemakaian.</td></tr>';
+      renderDashPagination('adminPromoVoucherUsagesPagination', null, 'loadAdminPromoVoucherUsagesPage');
+      return;
+    }
+
+    if (data.status_filter) {
+      adminPromoVoucherUsagesStatus = data.status_filter;
+      syncAdminPromoVoucherUsagesFilterButtons();
+    }
+
+    const summary = data.summary || {};
+    document.getElementById('adminPromoVoucherUsagesTotal').textContent = String(summary.total_count ?? 0);
+    document.getElementById('adminPromoVoucherUsagesPaid').textContent = String(summary.paid_count ?? 0);
+    document.getElementById('adminPromoVoucherUsagesPending').textContent = String(summary.pending_count ?? 0);
+    document.getElementById('adminPromoVoucherUsagesPaidAmount').textContent = summary.paid_amount_label || '—';
+
+    renderAdminPromoVoucherUsagesRows(data.usages || [], adminPromoVoucherUsagesStatus);
+
+    const metaEl = document.getElementById('adminPromoVoucherUsagesTableMeta');
+    const p = data.pagination;
+    if (metaEl) {
+      metaEl.textContent = p?.total
+        ? `Menampilkan ${p.from ?? 0}–${p.to ?? 0} dari ${p.total} transaksi`
+        : '';
+    }
+    renderDashPagination('adminPromoVoucherUsagesPagination', p, 'loadAdminPromoVoucherUsagesPage');
+  } catch {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat pemakaian.</td></tr>';
+    renderDashPagination('adminPromoVoucherUsagesPagination', null, 'loadAdminPromoVoucherUsagesPage');
+  }
+}
+
+function renderAdminPromoVoucherUsagesRows(rows, statusFilter = 'all') {
+  const tbody = document.getElementById('adminPromoVoucherUsagesBody');
+  if (!tbody) return;
+
+  if (!rows.length) {
+    const emptyMsg = statusFilter === 'all'
+      ? 'Belum ada pemakaian voucher ini.'
+      : 'Tidak ada transaksi untuk filter ini.';
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:28px;">${emptyMsg}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map((row) => {
+    const badge = adminPaymentOrderStatusBadge(row.status);
+    const description = row.description
+      || [row.application_name, row.package_name, row.type_label || row.type].filter(Boolean).join(' · ')
+      || '—';
+    return `<tr>
+      <td class="td-mono"><span class="cell-main">${escapeHtml(row.reference || row.order_id || '—')}</span></td>
+      <td><span class="admin-voucher-code-text admin-voucher-code-text--promo">${escapeHtml(row.voucher_code || '—')}</span></td>
+      <td class="td-bold">${escapeHtml(row.customer_name || '—')}</td>
+      <td>${escapeHtml(description)}</td>
+      <td class="td-green">${escapeHtml(row.amount_label || '—')}</td>
+      <td class="td-amber">${escapeHtml(row.discount_amount_label || '—')}</td>
+      <td><span class="badge ${badge}">${escapeHtml(row.status_label || row.status || '—')}</span></td>
+      <td>${escapeHtml(row.paid_at_date || '—')}</td>
+    </tr>`;
+  }).join('');
+}
+
+function closeAdminPromoVoucherUsagesModal() {
+  const modal = document.getElementById('adminPromoVoucherUsagesModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  if (!document.getElementById('appDialogModal')?.classList.contains('open')
+    && !document.getElementById('adminPromoVoucherModal')?.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
+  adminPromoVoucherUsagesModalId = null;
+}
+
+async function deleteAdminPromoVoucher(voucherId) {
+  const confirmed = await openAppDialog({
+    type: 'confirm',
+    title: 'Hapus Voucher',
+    message: 'Yakin ingin menghapus voucher promo ini?',
+    okText: 'Hapus',
+    danger: true,
+  });
+  if (!confirmed) return;
+
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  try {
+    const response = await fetch(`${adminPromoVouchersUrl}/${voucherId}`, {
+      method: 'DELETE',
+      headers: { Accept: 'application/json', 'X-CSRF-TOKEN': csrf },
+      credentials: 'same-origin',
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      await showAppAlert(data.message || 'Gagal menghapus voucher.');
+      return;
+    }
+    await refreshAdminPromoVouchersTable({ force: true });
+  } catch {
+    await showAppAlert('Terjadi kesalahan jaringan.');
   }
 }
 
@@ -3255,10 +5554,18 @@ function renderAdminLicensesRows(licenses) {
     const isExpiredLicense = !!license.is_expired || statusKey === 'expired';
     const isActiveLicense = !isExpiredLicense && (statusKey === 'active' || statusKey === 'trial');
     const devicesActive = Number(license.devices_active ?? 0);
-    const renewBtn = `<button type="button" class="btn btn-secondary admin-license-action-btn" onclick="renewAdminLicense(${license.id})"${isExpiredLicense ? '' : ' disabled'}>Renew</button>`;
-    const revokeBtn = `<button type="button" class="btn btn-secondary admin-license-action-btn admin-license-revoke-btn" onclick="revokeAdminLicense(${license.id})"${isActiveLicense ? '' : ' disabled'}>Revoke</button>`;
-    const releaseBtn = `<button type="button" class="btn btn-secondary admin-license-action-btn" onclick="releaseAdminLicenseDevices(${license.id})"${devicesActive > 0 ? '' : ' disabled'} title="${devicesActive > 0 ? `${devicesActive} perangkat terdaftar` : 'Tidak ada perangkat'}">Lepas perangkat</button>`;
-    const actionCell = `<div class="admin-license-actions">${renewBtn}${revokeBtn}${releaseBtn}</div>`;
+    const actionParts = [];
+    if (isExpiredLicense) {
+      actionParts.push(`<button type="button" class="btn btn-secondary dash-action-gear-menu-item admin-license-action-btn" onclick="renewAdminLicense(${license.id})">Renew</button>`);
+    }
+    if (isActiveLicense) {
+      actionParts.push(`<button type="button" class="btn btn-secondary dash-action-gear-menu-item admin-license-action-btn admin-license-revoke-btn" onclick="revokeAdminLicense(${license.id})">Revoke</button>`);
+    }
+    if (devicesActive > 0) {
+      actionParts.push(`<button type="button" class="btn btn-secondary dash-action-gear-menu-item admin-license-action-btn" onclick="releaseAdminLicenseDevices(${license.id})" title="${devicesActive} perangkat terdaftar">Lepas perangkat</button>`);
+    }
+    actionParts.push(`<button type="button" class="btn btn-primary dash-action-gear-menu-item admin-license-action-btn" onclick="openAdminLicensePackageModal(${license.id})">Ganti Paket</button>`);
+    const actionCell = renderDashActionGearMenu(`admin-license-gear-${license.id}`, actionParts.join(''));
 
     return `<tr data-license-id="${license.id}">
       <td class="td-mono">${escapeHtml(license.license_key || '—')}</td>
@@ -3267,7 +5574,7 @@ function renderAdminLicensesRows(licenses) {
       <td>${escapeHtml(license.package_name || '—')}${license.devices_max ? ` <span style="color:var(--text-3);font-size:11px;">(${Number(license.devices_max)} pc)</span>` : ''}</td>
       <td><span class="badge ${badge}">${escapeHtml(label)}</span></td>
       <td>${escapeHtml(license.expires_at || '—')}</td>
-      <td>${actionCell}</td>
+      <td class="admin-license-actions-cell">${actionCell}</td>
     </tr>`;
   }).join('');
 }
@@ -3343,6 +5650,136 @@ async function refreshAdminLicensesTable() {
     renderAdminLicensesRows(data.licenses || []);
   } catch {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat lisensi.</td></tr>';
+  }
+}
+
+function showAdminLicensePackageAlert(message, type = 'error') {
+  const alert = document.getElementById('adminLicensePackageAlert');
+  if (!alert) return;
+  if (!message) {
+    alert.hidden = true;
+    alert.textContent = '';
+    return;
+  }
+  alert.hidden = false;
+  alert.className = `admin-app-alert ${type === 'success' ? 'is-success' : 'is-error'}`;
+  alert.textContent = message;
+}
+
+function closeAdminLicensePackageModal() {
+  const modal = document.getElementById('adminLicensePackageModal');
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('hidden', '');
+  modal.setAttribute('aria-hidden', 'true');
+  adminLicensePackageEditId = null;
+  showAdminLicensePackageAlert('');
+  if (!document.getElementById('adminClientModal')?.classList.contains('open')) {
+    document.body.style.overflow = '';
+  }
+}
+
+async function renderAdminLicensePackageOptions(applicationId, selectedPackageId) {
+  const container = document.getElementById('adminLicensePackageOptions');
+  if (!container) return;
+
+  if (!adminApplicationsCache.length) {
+    await refreshAdminApplicationsTable(true);
+  }
+
+  const app = adminApplicationsCache.find((row) => Number(row.id) === Number(applicationId));
+  const packages = app?.packages || [];
+
+  if (!packages.length) {
+    container.innerHTML = '<div class="admin-app-check-empty">Belum ada paket di Master Aplikasi untuk produk ini.</div>';
+    return;
+  }
+
+  const selectedId = Number(selectedPackageId) || Number(packages[0].id);
+  container.innerHTML = packages.map((pkg) => {
+    const checked = Number(pkg.id) === selectedId ? 'checked' : '';
+    return `<label class="admin-client-pkg-option">
+      <input type="radio" name="adminLicensePackageChoice" value="${Number(pkg.id)}" ${checked}>
+      <span class="admin-client-pkg-body">
+        <strong>${escapeHtml(pkg.name)}</strong>
+        <small>${escapeHtml(formatAdminClientPackageMeta(pkg))}</small>
+      </span>
+    </label>`;
+  }).join('');
+}
+
+async function openAdminLicensePackageModal(licenseId) {
+  const license = adminLicensesCache.find((item) => Number(item.id) === Number(licenseId));
+  if (!license) return;
+
+  const modal = document.getElementById('adminLicensePackageModal');
+  if (!modal) return;
+
+  adminLicensePackageEditId = Number(license.id);
+  showAdminLicensePackageAlert('');
+
+  const title = document.getElementById('adminLicensePackageModalTitle');
+  const subtitle = document.getElementById('adminLicensePackageModalSubtitle');
+  if (title) title.textContent = 'Ganti paket';
+  if (subtitle) {
+    subtitle.textContent = `${license.client_name || 'Client'} · ${license.application_name || 'Aplikasi'} · paket saat ini: ${license.package_name || '—'}`;
+  }
+
+  await renderAdminLicensePackageOptions(license.application_id, license.package_id);
+
+  modal.removeAttribute('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+async function submitAdminLicensePackageChange() {
+  const licenseId = adminLicensePackageEditId;
+  if (!licenseId) return;
+
+  const selected = document.querySelector('#adminLicensePackageOptions input[name="adminLicensePackageChoice"]:checked');
+  const packageId = Number(selected?.value);
+  if (!packageId) {
+    showAdminLicensePackageAlert('Pilih paket terlebih dahulu.');
+    return;
+  }
+
+  const btn = document.getElementById('adminLicensePackageSaveBtn');
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Menyimpan…';
+  }
+
+  try {
+    const response = await fetch(`${adminLicensesUrl}/${licenseId}/package`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ package_id: packageId }),
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      showAdminLicensePackageAlert(data.message || 'Gagal menyimpan paket.');
+      return;
+    }
+
+    showAdminLicensePackageAlert(data.message || 'Paket berhasil diperbarui.', 'success');
+    await refreshAdminLicensesTable();
+    setTimeout(() => closeAdminLicensePackageModal(), 450);
+  } catch {
+    showAdminLicensePackageAlert('Gagal menghubungi server.');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Simpan';
+    }
   }
 }
 
@@ -3535,7 +5972,7 @@ function toggleAdminTransactionGateway(trxId, btn) {
   if (mainRow) mainRow.classList.toggle('is-open', willOpen);
 }
 
-function renderAdminTransactionsRows(transactions) {
+function renderAdminTransactionsRows(transactions, statusFilter = 'all') {
   const tbody = document.getElementById('adminTransactionsTableBody');
   const countEl = document.getElementById('adminTransactionsCount');
   if (!tbody) return;
@@ -3543,20 +5980,21 @@ function renderAdminTransactionsRows(transactions) {
   adminTransactionsCache = transactions;
 
   if (countEl) {
-    countEl.textContent = `${transactions.length} transaksi tercatat`;
+    countEl.textContent = 'Daftar transaksi';
   }
 
   if (!transactions.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada transaksi.</td></tr>';
+    const emptyMsg = statusFilter === 'all'
+      ? 'Belum ada transaksi.'
+      : 'Tidak ada transaksi untuk filter ini.';
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text-3);padding:28px;">${emptyMsg}</td></tr>`;
     return;
   }
 
   tbody.innerHTML = transactions.map((trx) => {
     const badge = adminTransactionStatusBadge(trx.status);
     const statusLabel = trx.status_label || trx.status || '—';
-    const referralCell = trx.referral_label && trx.referral_label !== '—'
-      ? `<span class="cell-main">${escapeHtml(trx.referral_code || '—')}</span>${trx.affiliate_name ? `<span class="cell-sub">${escapeHtml(trx.affiliate_name)}</span>` : ''}`
-      : '<span style="color:var(--text-3);font-size:11px;">—</span>';
+    const referralCell = adminVoucherCodeCell(trx);
     const gatewayCell = trx.has_gateway_details
       ? `<button type="button" class="admin-app-acc-toggle" onclick="toggleAdminTransactionGateway(${trx.id}, this)" aria-expanded="false">
           <span>Detail</span>
@@ -3586,12 +6024,33 @@ function renderAdminTransactionsRows(transactions) {
   }).join('');
 }
 
-async function refreshAdminTransactionsTable() {
+function syncAdminTransactionsLedgerFilterButtons() {
+  document.querySelectorAll('#adminTransactionsLedgerFilters .admin-affiliate-trx-filter').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.status === adminTransactionsLedgerStatus);
+  });
+}
+
+function setAdminTransactionsLedgerStatusFilter(status) {
+  adminTransactionsLedgerStatus = status;
+  syncAdminTransactionsLedgerFilterButtons();
+  loadAdminTransactionsLedgerPage(1);
+}
+
+async function loadAdminTransactionsLedgerPage(page = adminTransactionsLedgerPage) {
   const tbody = document.getElementById('adminTransactionsTableBody');
   if (!tbody) return;
 
+  adminTransactionsLedgerPage = Math.max(1, page);
+  tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
+
+  const params = new URLSearchParams({
+    page: String(adminTransactionsLedgerPage),
+    per_page: String(ADMIN_TRX_DETAIL_PER_PAGE),
+    status: adminTransactionsLedgerStatus,
+  });
+
   try {
-    const response = await fetch(adminTransactionsUrl, {
+    const response = await fetch(`${adminTransactionsUrl}?${params}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     });
@@ -3599,14 +6058,34 @@ async function refreshAdminTransactionsTable() {
 
     if (!response.ok) {
       tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi.</td></tr>';
+      renderDashPagination('adminTransactionsLedgerPagination', null, 'loadAdminTransactionsLedgerPage');
       return;
     }
 
+    if (data.status_filter) {
+      adminTransactionsLedgerStatus = data.status_filter;
+      syncAdminTransactionsLedgerFilterButtons();
+    }
+
     renderAdminTransactionsSummary(data.summary || {});
-    renderAdminTransactionsRows(data.transactions || []);
+    renderAdminTransactionsRows(data.transactions || [], adminTransactionsLedgerStatus);
+
+    const metaEl = document.getElementById('adminTransactionsLedgerMeta');
+    const p = data.pagination;
+    if (metaEl) {
+      metaEl.textContent = p?.total
+        ? `Menampilkan ${p.from ?? 0}–${p.to ?? 0} dari ${p.total} transaksi`
+        : '';
+    }
+    renderDashPagination('adminTransactionsLedgerPagination', p, 'loadAdminTransactionsLedgerPage');
   } catch {
     tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat transaksi.</td></tr>';
+    renderDashPagination('adminTransactionsLedgerPagination', null, 'loadAdminTransactionsLedgerPage');
   }
+}
+
+async function refreshAdminTransactionsTable() {
+  await loadAdminTransactionsLedgerPage(adminTransactionsLedgerPage);
 }
 
 function switchAdminTransactionsTab(tab, btn) {
@@ -3622,7 +6101,19 @@ function switchAdminTransactionsTab(tab, btn) {
   if (ledgerPanel) ledgerPanel.hidden = tab !== 'ledger';
   if (invoicesPanel) invoicesPanel.hidden = tab !== 'invoices';
 
-  if (tab === 'invoices') refreshAdminPaymentOrdersTable();
+  if (tab === 'invoices') loadAdminPaymentOrdersPage(adminPaymentOrdersPage);
+}
+
+function syncAdminPaymentOrdersStatusFilterButtons() {
+  document.querySelectorAll('#adminPaymentOrdersStatusFilters .admin-affiliate-trx-filter').forEach((btn) => {
+    btn.classList.toggle('is-active', btn.dataset.status === adminPaymentOrdersStatus);
+  });
+}
+
+function setAdminPaymentOrdersStatusFilter(status) {
+  adminPaymentOrdersStatus = status;
+  syncAdminPaymentOrdersStatusFilterButtons();
+  loadAdminPaymentOrdersPage(1);
 }
 
 function adminPaymentOrderStatusBadge(status) {
@@ -3659,7 +6150,7 @@ function toggleAdminPaymentOrderGateway(orderId, btn) {
   if (mainRow) mainRow.classList.toggle('is-open', willOpen);
 }
 
-function renderAdminPaymentOrdersRows(orders) {
+function renderAdminPaymentOrdersRows(orders, statusFilter = 'all') {
   const tbody = document.getElementById('adminPaymentOrdersTableBody');
   const countEl = document.getElementById('adminPaymentOrdersCount');
   if (!tbody) return;
@@ -3667,11 +6158,14 @@ function renderAdminPaymentOrdersRows(orders) {
   adminPaymentOrdersCache = orders;
 
   if (countEl) {
-    countEl.textContent = `${orders.length} invoice payment customer`;
+    countEl.textContent = 'Invoice payment gateway';
   }
 
   if (!orders.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Belum ada invoice gateway.</td></tr>';
+    const emptyMsg = statusFilter === 'all'
+      ? 'Belum ada invoice gateway.'
+      : 'Tidak ada invoice untuk filter ini.';
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">${emptyMsg}</td></tr>`;
     return;
   }
 
@@ -3683,9 +6177,7 @@ function renderAdminPaymentOrdersRows(orders) {
     const badgeClass = order.has_gateway_mismatch && order.gateway_status
       ? adminPaymentOrderStatusBadge(String(order.gateway_status).toLowerCase())
       : badge;
-    const referralCell = order.referral_label && order.referral_label !== '—'
-      ? `<span class="cell-main">${escapeHtml(order.referral_code || '—')}</span>${order.affiliate_name ? `<span class="cell-sub">${escapeHtml(order.affiliate_name)}</span>` : ''}`
-      : '<span style="color:var(--text-3);font-size:11px;">—</span>';
+    const referralCell = adminVoucherCodeCell(order);
 
     return `<tr class="admin-pay-main-row" data-payment-order-id="${order.id}">
       <td class="td-mono">
@@ -3719,24 +6211,27 @@ function renderAdminPaymentOrdersRows(orders) {
 
 function debounceAdminPaymentOrdersSearch() {
   clearTimeout(adminPaymentOrdersSearchTimer);
-  adminPaymentOrdersSearchTimer = setTimeout(() => refreshAdminPaymentOrdersTable(), 300);
+  adminPaymentOrdersSearchTimer = setTimeout(() => loadAdminPaymentOrdersPage(1), 300);
 }
 
-async function refreshAdminPaymentOrdersTable() {
+async function loadAdminPaymentOrdersPage(page = adminPaymentOrdersPage) {
   const tbody = document.getElementById('adminPaymentOrdersTableBody');
   if (!tbody) return;
 
+  adminPaymentOrdersPage = Math.max(1, page);
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>';
+
   const searchEl = document.getElementById('adminPaymentOrdersSearch');
-  const statusEl = document.getElementById('adminPaymentOrdersStatusFilter');
-  const params = new URLSearchParams();
+  const params = new URLSearchParams({
+    page: String(adminPaymentOrdersPage),
+    per_page: String(ADMIN_TRX_DETAIL_PER_PAGE),
+    status: adminPaymentOrdersStatus,
+  });
 
   if (searchEl?.value?.trim()) params.set('q', searchEl.value.trim());
-  if (statusEl?.value && statusEl.value !== 'all') params.set('status', statusEl.value);
-
-  const url = params.toString() ? `${adminPaymentOrdersUrl}?${params}` : adminPaymentOrdersUrl;
 
   try {
-    const response = await fetch(url, {
+    const response = await fetch(`${adminPaymentOrdersUrl}?${params}`, {
       headers: { Accept: 'application/json' },
       credentials: 'same-origin',
     });
@@ -3744,14 +6239,34 @@ async function refreshAdminPaymentOrdersTable() {
 
     if (!response.ok) {
       tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat invoice gateway.</td></tr>';
+      renderDashPagination('adminPaymentOrdersPagination', null, 'loadAdminPaymentOrdersPage');
       return;
     }
 
+    if (data.status_filter) {
+      adminPaymentOrdersStatus = data.status_filter;
+      syncAdminPaymentOrdersStatusFilterButtons();
+    }
+
     renderAdminPaymentOrdersSummary(data.summary || {});
-    renderAdminPaymentOrdersRows(data.orders || []);
+    renderAdminPaymentOrdersRows(data.orders || [], adminPaymentOrdersStatus);
+
+    const metaEl = document.getElementById('adminPaymentOrdersTableMeta');
+    const p = data.pagination;
+    if (metaEl) {
+      metaEl.textContent = p?.total
+        ? `Menampilkan ${p.from ?? 0}–${p.to ?? 0} dari ${p.total} invoice`
+        : '';
+    }
+    renderDashPagination('adminPaymentOrdersPagination', p, 'loadAdminPaymentOrdersPage');
   } catch {
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Gagal memuat invoice gateway.</td></tr>';
+    renderDashPagination('adminPaymentOrdersPagination', null, 'loadAdminPaymentOrdersPage');
   }
+}
+
+async function refreshAdminPaymentOrdersTable() {
+  await loadAdminPaymentOrdersPage(adminPaymentOrdersPage);
 }
 
 function formatAdminPackagePrice(value) {
@@ -3766,17 +6281,6 @@ function parseAdminPackagePriceInput(value) {
   const cleaned = raw.replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.');
   const num = Number(cleaned);
   return Number.isNaN(num) ? 0 : Math.max(0, num);
-}
-
-function formatAdminPackagePriceDisplay(value) {
-  const num = Math.max(0, Number(value ?? 0));
-  if (Number.isNaN(num)) return 'Rp 0';
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(num);
 }
 
 function bindAdminPackagePriceInput(input) {
@@ -3905,6 +6409,8 @@ function updateAdminApplicationPackagesEmptyState() {
 }
 
 let adminPackageFeaturesTargetRow = null;
+let adminPackageDeviceSlotsTargetRow = null;
+let adminAppPackageGearSeq = 0;
 
 function inferAdminPackageFeatures(name) {
   const n = String(name || '').trim().toLowerCase();
@@ -3940,6 +6446,64 @@ function initAdminPackageRowFeatures(row, pkg = {}) {
   } else {
     writeAdminPackageRowFeatures(row, inferAdminPackageFeatures(pkg.name));
   }
+}
+
+function readAdminPackageRowDeviceSlots(row) {
+  return {
+    device_slot_price: Number(row?.dataset?.deviceSlotPrice || 0),
+    max_extra_device_slots: Number(row?.dataset?.maxExtraDeviceSlots || 0),
+  };
+}
+
+function writeAdminPackageRowDeviceSlots(row, { device_slot_price, max_extra_device_slots }) {
+  if (!row) return;
+  row.dataset.deviceSlotPrice = String(Number(device_slot_price || 0));
+  row.dataset.maxExtraDeviceSlots = String(Math.max(0, Math.min(99, Number(max_extra_device_slots || 0))));
+}
+
+function initAdminPackageRowDeviceSlots(row, pkg = {}) {
+  writeAdminPackageRowDeviceSlots(row, {
+    device_slot_price: pkg.device_slot_price ?? 0,
+    max_extra_device_slots: pkg.max_extra_device_slots ?? 0,
+  });
+}
+
+function openAdminPackageDeviceSlotsModal(btn) {
+  const row = btn?.closest('tr.admin-app-package-row');
+  if (!row) return;
+  adminPackageDeviceSlotsTargetRow = row;
+  const modal = document.getElementById('adminPackageDeviceSlotsModal');
+  const subtitle = document.getElementById('adminPackageDeviceSlotsSubtitle');
+  const name = row.querySelector('.pkg-name')?.value?.trim() || 'Paket';
+  if (subtitle) subtitle.textContent = `Slot perangkat ekstra untuk “${name}” (di atas limit default)`;
+  const { device_slot_price, max_extra_device_slots } = readAdminPackageRowDeviceSlots(row);
+  const priceEl = document.getElementById('adminPkgDeviceSlotPrice');
+  const maxEl = document.getElementById('adminPkgMaxExtraDeviceSlots');
+  if (priceEl) priceEl.value = formatAdminPackagePriceDisplay(device_slot_price);
+  if (maxEl) maxEl.value = String(max_extra_device_slots);
+  bindAdminPackagePriceInput(priceEl);
+  if (modal) modal.hidden = false;
+}
+
+function closeAdminPackageDeviceSlotsModal() {
+  const modal = document.getElementById('adminPackageDeviceSlotsModal');
+  if (modal) modal.hidden = true;
+  adminPackageDeviceSlotsTargetRow = null;
+}
+
+function saveAdminPackageDeviceSlotsModal() {
+  const row = adminPackageDeviceSlotsTargetRow;
+  if (!row) {
+    closeAdminPackageDeviceSlotsModal();
+    return;
+  }
+  const priceEl = document.getElementById('adminPkgDeviceSlotPrice');
+  const maxEl = document.getElementById('adminPkgMaxExtraDeviceSlots');
+  writeAdminPackageRowDeviceSlots(row, {
+    device_slot_price: parseAdminPackagePriceInput(priceEl?.value || 0),
+    max_extra_device_slots: Number(maxEl?.value || 0),
+  });
+  closeAdminPackageDeviceSlotsModal();
 }
 
 function bindAdminPackageFeaturesModalControls() {
@@ -4028,8 +6592,18 @@ function addAdminApplicationPackageRow(pkg = {}) {
   const isUnlimited = Number(pkg.duration_days ?? 30) === 0;
   const daysValue = isUnlimited ? 30 : Number(pkg.duration_days ?? 30);
 
+  const gearMenuId = `admin-app-pkg-gear-${++adminAppPackageGearSeq}`;
+  const pkgGearItems = [
+    '<button type="button" class="btn btn-secondary dash-action-gear-menu-item" onclick="openAdminPackageDeviceSlotsModal(this)">Slot perangkat</button>',
+    '<button type="button" class="btn btn-secondary dash-action-gear-menu-item" onclick="openAdminPackageFeaturesModal(this)">Fitur paket</button>',
+    '<button type="button" class="btn btn-secondary dash-action-gear-menu-item admin-app-pkg-remove-menu" onclick="removeAdminApplicationPackageRow(this)">Hapus paket</button>',
+  ].join('');
+
   const row = document.createElement('tr');
   row.className = 'admin-app-package-row';
+  if (Number(pkg.id) > 0) {
+    row.dataset.packageId = String(pkg.id);
+  }
   row.innerHTML = `
     <td><input class="admin-app-input pkg-name" type="text" placeholder="Trial / Basic / Pro" value="${escapeHtml(pkg.name || '')}"></td>
     <td class="pkg-quota-cell"><input class="admin-app-input pkg-quota" type="number" min="1" max="999" value="${Number(pkg.devices_quota ?? 1)}" required></td>
@@ -4044,17 +6618,13 @@ function addAdminApplicationPackageRow(pkg = {}) {
     <td class="pkg-discount-cell"><input class="admin-app-input pkg-discount" type="number" min="0" max="100" step="0.01" value="${formatAdminPackageCommissionPercent(pkg.discount_percent ?? 0)}" placeholder="0"></td>
     <td class="pkg-commission-fixed-cell"><input class="admin-app-input pkg-commission-fixed" type="text" inputmode="numeric" value="${formatAdminPackagePriceDisplay(pkg.affiliate_commission_fixed ?? 0)}" placeholder="Rp 0"></td>
     <td class="pkg-commission-percent-cell"><input class="admin-app-input pkg-commission-percent" type="number" min="0" max="100" step="0.01" value="${formatAdminPackageCommissionPercent(pkg.affiliate_commission_percent ?? 0)}" placeholder="0"></td>
-    <td class="col-pkg-actions-cell">
-      <div class="admin-app-pkg-actions">
-        <button type="button" class="admin-app-pkg-features" title="Fitur paket" onclick="openAdminPackageFeaturesModal(this)">Fitur</button>
-        <button type="button" class="admin-app-pkg-remove" title="Hapus paket" onclick="removeAdminApplicationPackageRow(this)">×</button>
-      </div>
-    </td>
+    <td class="col-pkg-actions-cell admin-app-pkg-actions-cell">${renderDashActionGearMenu(gearMenuId, pkgGearItems)}</td>
   `;
   body.appendChild(row);
   bindAdminPackagePriceInput(row.querySelector('.pkg-price'));
   bindAdminPackagePriceInput(row.querySelector('.pkg-commission-fixed'));
   initAdminPackageRowFeatures(row, pkg);
+  initAdminPackageRowDeviceSlots(row, pkg);
   initializeAdminPackageCommissionRow(row, pkg);
   updateAdminApplicationPackagesEmptyState();
 }
@@ -4104,7 +6674,8 @@ function collectAdminApplicationPackages() {
     const name = row.querySelector('.pkg-name')?.value?.trim();
     if (!name) return;
 
-    packages.push({
+    const packageId = Number(row.dataset.packageId || 0);
+    const payload = {
       name,
       devices_quota: Number(row.querySelector('.pkg-quota')?.value || 1),
       duration_days: row.querySelector('.pkg-days-wrap')?.classList.contains('is-unlimited')
@@ -4116,7 +6687,10 @@ function collectAdminApplicationPackages() {
       affiliate_commission_percent: Number(row.querySelector('.pkg-commission-percent')?.value || 0),
       sort_order: index,
       ...readAdminPackageRowFeatures(row),
-    });
+      ...readAdminPackageRowDeviceSlots(row),
+    };
+    if (packageId > 0) payload.id = packageId;
+    packages.push(payload);
   });
 
   return packages;
@@ -4149,6 +6723,9 @@ function switchAdminApplicationPanel(panel, btn) {
   modal.querySelectorAll('.admin-app-panel').forEach((el) => {
     el.classList.toggle('active', el.dataset.panel === panel);
   });
+  if (panel === 'notification') {
+    syncAdminApplicationNotificationPackages(collectAdminApplicationNotificationPackageIds());
+  }
 }
 
 function switchAdminClientPanel(panel, btn) {
@@ -4178,6 +6755,87 @@ function clearAdminApplicationLogo() {
   updateAdminApplicationLogoPreview('');
   const fileInput = document.getElementById('adminApplicationLogoFile');
   if (fileInput) fileInput.value = '';
+}
+
+function updateAdminApplicationNotificationPreview(url) {
+  const preview = document.getElementById('adminApplicationNotificationImagePreview');
+  const hidden = document.getElementById('adminApplicationNotificationImageUrl');
+  const clearBtn = document.getElementById('adminApplicationNotificationImageClearBtn');
+  if (!preview || !hidden) return;
+  hidden.value = url || '';
+  preview.innerHTML = url
+    ? `<img src="${escapeHtml(url)}" alt="Gambar notifikasi">`
+    : '<span class="admin-app-logo-empty">Belum ada gambar</span>';
+  if (clearBtn) clearBtn.hidden = !url;
+}
+
+function clearAdminApplicationNotificationImage() {
+  updateAdminApplicationNotificationPreview('');
+  const fileInput = document.getElementById('adminApplicationNotificationImageFile');
+  if (fileInput) fileInput.value = '';
+}
+
+async function uploadAdminApplicationNotificationImage(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+  const formData = new FormData();
+  formData.append('image', file);
+  try {
+    const response = await fetch(adminApplicationLogoUploadUrl, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'X-CSRF-TOKEN': csrf,
+      },
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok || !data.url) {
+      showAdminApplicationAlert(data.message || 'Gagal mengunggah gambar.');
+      return;
+    }
+    updateAdminApplicationNotificationPreview(data.url);
+  } catch {
+    showAdminApplicationAlert('Gagal mengunggah gambar.');
+  } finally {
+    input.value = '';
+  }
+}
+
+function collectAdminApplicationNotificationPackageIds() {
+  return Array.from(
+    document.querySelectorAll('#adminApplicationNotificationPackages input[type="checkbox"]:checked'),
+  )
+    .map((el) => Number(el.value))
+    .filter((id) => id > 0);
+}
+
+function renderAdminApplicationNotificationPackages(packages, selectedIds) {
+  const wrap = document.getElementById('adminApplicationNotificationPackages');
+  const empty = document.getElementById('adminApplicationNotificationPackagesEmpty');
+  if (!wrap) return;
+  const list = (packages || []).filter((p) => Number(p.id) > 0);
+  const selected = new Set((selectedIds || []).map((id) => Number(id)));
+  if (!list.length) {
+    wrap.innerHTML = '';
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  wrap.innerHTML = list
+    .map(
+      (p) => `<label class="admin-app-notification-pkg">
+        <input type="checkbox" value="${Number(p.id)}" ${selected.has(Number(p.id)) ? 'checked' : ''}>
+        <span>${escapeHtml(p.name || 'Paket')}</span>
+      </label>`,
+    )
+    .join('');
+}
+
+function syncAdminApplicationNotificationPackages(selectedIds) {
+  const packages = collectAdminApplicationPackages().filter((p) => p.id);
+  renderAdminApplicationNotificationPackages(packages, selectedIds);
 }
 
 async function uploadAdminApplicationLogo(input) {
@@ -4247,6 +6905,9 @@ function openAdminApplicationModal(applicationId = null) {
     document.getElementById('adminApplicationIsActive').checked = !!app.is_active;
     updateAdminApplicationLogoPreview(app.logo_url || '');
     renderAdminApplicationPackages(app.packages || []);
+    document.getElementById('adminApplicationNotificationEnabled').checked = !!app.notification_enabled;
+    updateAdminApplicationNotificationPreview(app.notification_image_url || '');
+    syncAdminApplicationNotificationPackages(app.notification_package_ids || []);
   } else {
     title.textContent = 'Tambah Aplikasi';
     idInput.value = '';
@@ -4255,6 +6916,9 @@ function openAdminApplicationModal(applicationId = null) {
     document.getElementById('adminApplicationIsActive').checked = true;
     updateAdminApplicationLogoPreview('');
     renderAdminApplicationPackages([]);
+    document.getElementById('adminApplicationNotificationEnabled').checked = false;
+    updateAdminApplicationNotificationPreview('');
+    syncAdminApplicationNotificationPackages([]);
   }
 
   modal.classList.add('open');
@@ -4286,7 +6950,21 @@ async function submitAdminApplicationForm(event) {
     sort_order: Number(document.getElementById('adminApplicationSortOrder')?.value || 0),
     is_active: document.getElementById('adminApplicationIsActive')?.checked ?? true,
     packages: collectAdminApplicationPackages(),
+    notification_enabled: document.getElementById('adminApplicationNotificationEnabled')?.checked ?? false,
+    notification_image_url: document.getElementById('adminApplicationNotificationImageUrl')?.value.trim() || null,
+    notification_package_ids: collectAdminApplicationNotificationPackageIds(),
   };
+
+  if (payload.notification_enabled) {
+    if (!payload.notification_image_url) {
+      showAdminApplicationAlert('Unggah gambar popup jika notifikasi diaktifkan.');
+      return;
+    }
+    if (!payload.notification_package_ids.length) {
+      showAdminApplicationAlert('Pilih minimal satu paket untuk notifikasi.');
+      return;
+    }
+  }
 
   const isEdit = Boolean(applicationId);
   const url = isEdit ? `${adminApplicationsUrl}/${applicationId}` : adminApplicationsUrl;
@@ -4443,7 +7121,6 @@ function getSelectedAdminClientApplications() {
 function validateAdminClientForm(isEdit) {
   const name = document.getElementById('adminClientName')?.value.trim();
   const email = document.getElementById('adminClientEmail')?.value.trim();
-  const whatsapp = document.getElementById('adminClientWhatsapp')?.value.trim();
   const password = document.getElementById('adminClientPassword')?.value;
   const modal = document.getElementById('adminClientModal');
 
@@ -4456,27 +7133,15 @@ function validateAdminClientForm(isEdit) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { valid: false, panel: 'general', message: 'Format email tidak valid.' };
   }
-  if (!whatsapp) {
-    return { valid: false, panel: 'general', message: 'Nomor WhatsApp wajib diisi.' };
-  }
-  if (!/^08[0-9]{8,13}$/.test(whatsapp)) {
-    return { valid: false, panel: 'general', message: 'Nomor WhatsApp harus dimulai 08 dan 10-15 digit.' };
-  }
   if (!isEdit && (!password || password.length < 8)) {
     return { valid: false, panel: 'general', message: 'Password wajib diisi minimal 8 karakter.' };
   }
   if (isEdit && password && password.length < 8) {
     return { valid: false, panel: 'general', message: 'Password minimal 8 karakter jika diubah.' };
   }
-  const checkedApps = document.querySelectorAll('.admin-client-app-check:checked').length;
-  const assignments = getSelectedAdminClientApplications();
-  if (checkedApps > 0 && assignments.length !== checkedApps) {
-    return { valid: false, panel: 'applications', message: 'Pilih identitas paket untuk setiap aplikasi yang dicentang.' };
-  }
-
   if (modal) {
     modal.querySelectorAll('.admin-app-nav-item').forEach((el) => {
-      if (el.dataset.panel === 'general' || el.dataset.panel === 'applications') {
+      if (el.dataset.panel === 'general') {
         el.classList.remove('has-error');
       }
     });
@@ -4635,7 +7300,6 @@ async function openAdminClientModal(clientId = null) {
     syncAdminClientAccountZone(true, client.status || 'active');
     passwordInput.required = false;
     passwordHint.textContent = '(kosongkan jika tidak diubah)';
-    await renderAdminClientApplicationOptions(client.applications || []);
     fillAdminClientAffiliateFields(client.user_id);
     syncAdminClientRoleField(client.user_id, true);
   } else {
@@ -4650,7 +7314,6 @@ async function openAdminClientModal(clientId = null) {
     document.getElementById('adminClientEmailVerified').checked = false;
     passwordInput.required = true;
     passwordHint.textContent = '(wajib)';
-    await renderAdminClientApplicationOptions([]);
   }
 
   modal.classList.add('open');
@@ -4720,16 +7383,20 @@ async function submitAdminClientForm(event) {
     company_name: clientName,
     email: document.getElementById('adminClientEmail')?.value.trim(),
     email_verified: !!document.getElementById('adminClientEmailVerified')?.checked,
-    whatsapp: document.getElementById('adminClientWhatsapp')?.value.trim(),
+    whatsapp: document.getElementById('adminClientWhatsapp')?.value.trim() || null,
     status: document.getElementById('adminClientStatus')?.value,
-    applications: getSelectedAdminClientApplications(),
   };
+
+  if (!isEdit) {
+    payload.applications = getSelectedAdminClientApplications();
+  }
 
   const password = document.getElementById('adminClientPassword')?.value;
   if (password) payload.password = password;
 
   const url = isEdit ? `${adminClientsUrl}/${clientId}` : adminClientsUrl;
   const method = isEdit ? 'PUT' : 'POST';
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 
   if (btn) {
     btn.disabled = true;
@@ -4742,7 +7409,7 @@ async function submitAdminClientForm(event) {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'X-CSRF-TOKEN': csrf,
+        ...(csrf ? { 'X-CSRF-TOKEN': csrf } : {}),
       },
       credentials: 'same-origin',
       body: JSON.stringify(payload),
@@ -4753,7 +7420,7 @@ async function submitAdminClientForm(event) {
       const firstError = data.errors
         ? Object.values(data.errors).flat()[0]
         : (data.message || 'Gagal menyimpan client.');
-      const errorPanel = /whatsapp|password|email|name|company/i.test(firstError) ? 'general' : 'applications';
+      const errorPanel = 'general';
       focusAdminClientPanel(errorPanel);
       showAdminClientAlert(firstError);
       document.getElementById('adminClientAlert')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -5719,6 +8386,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   initAppState();
+
+  document.getElementById('clientReportArchiveSaveBtn')?.addEventListener('click', () => {
+    saveClientReportArchivePassword();
+  });
+
+  document.getElementById('clientSettingsSaveBtn')?.addEventListener('click', () => {
+    saveClientProfile();
+  });
 });
 
 let clientLicenseTabHiddenAt = 0;

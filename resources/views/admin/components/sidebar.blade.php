@@ -16,6 +16,9 @@
       <button class="dash-nav-item" onclick="switchDashPage('admin','affiliates',this)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Affiliate
       </button>
+      <button class="dash-nav-item" onclick="switchDashPage('admin','promo-vouchers',this)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 12H4M12 20V4"/></svg> Voucher Promo
+      </button>
       <button class="dash-nav-item" onclick="switchDashPage('admin','commissions',this)">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Komisi
       </button>

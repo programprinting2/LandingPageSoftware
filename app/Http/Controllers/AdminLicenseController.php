@@ -78,6 +78,103 @@ class AdminLicenseController extends Controller
         ]);
     }
 
+    public function changePackage(Request $request, int $clientApplication): JsonResponse
+    {
+        $packageId = (int) $request->input('package_id', 0);
+
+        if ($packageId <= 0) {
+            return response()->json([
+                'message' => 'Paket wajib dipilih.',
+            ], 422);
+        }
+
+        $record = DB::table('client_applications')->where('id', $clientApplication)->first();
+
+        if (! $record) {
+            return response()->json([
+                'message' => 'Lisensi tidak ditemukan.',
+            ], 404);
+        }
+
+        $package = ApplicationPackage::query()
+            ->where('id', $packageId)
+            ->where('application_id', (int) $record->application_id)
+            ->first();
+
+        if (! $package) {
+            return response()->json([
+                'message' => 'Paket tidak valid untuk aplikasi ini.',
+            ], 422);
+        }
+
+        $previousPackageId = (int) ($record->application_package_id ?? 0);
+
+        if ($previousPackageId === (int) $package->id) {
+            return response()->json([
+                'message' => 'Paket sudah sama — tidak ada perubahan.',
+            ], 422);
+        }
+
+        $client = Client::query()->with('user')->find($record->client_id);
+        $application = Application::find($record->application_id);
+
+        if (! $client || ! $application || ! $client->user) {
+            return response()->json([
+                'message' => 'Data client atau aplikasi tidak ditemukan.',
+            ], 422);
+        }
+
+        $purchasedAt = now();
+        $expiresAt = (int) $package->duration_days > 0
+            ? $purchasedAt->copy()->addDays((int) $package->duration_days)
+            : null;
+        $status = $package->is_trial ? 'trial' : 'active';
+        $trialConsumed = $package->is_trial || (bool) ($record->trial_consumed ?? false);
+
+        DB::transaction(function () use (
+            $clientApplication,
+            $package,
+            $purchasedAt,
+            $expiresAt,
+            $status,
+            $trialConsumed,
+            $client,
+            $application,
+            $previousPackageId,
+        ) {
+            DB::table('client_applications')->where('id', $clientApplication)->update([
+                'application_package_id' => $package->id,
+                'devices_max' => (int) $package->devices_quota,
+                'status' => $status,
+                'purchased_at' => $purchasedAt,
+                'expires_at' => $expiresAt,
+                'trial_consumed' => $trialConsumed,
+                'updated_at' => now(),
+            ]);
+
+            $service = app(TransactionService::class);
+
+            if ($previousPackageId <= 0) {
+                $service->recordPurchase($client, $application, $package, 'admin', null, [
+                    'client_application_id' => $clientApplication,
+                ]);
+            } else {
+                $currentPackage = ApplicationPackage::find($previousPackageId);
+                $service->recordUpgrade(
+                    $client->user,
+                    $application,
+                    $package,
+                    $currentPackage,
+                    'admin',
+                );
+            }
+        });
+
+        return response()->json([
+            'message' => 'Paket lisensi berhasil diperbarui.',
+        ]);
+    }
+
     public function renew(Request $request, int $clientApplication): JsonResponse
     {
         $record = DB::table('client_applications')->where('id', $clientApplication)->first();
@@ -95,7 +192,7 @@ class AdminLicenseController extends Controller
 
         if (! $isExpired && (string) $record->status !== 'expired') {
             return response()->json([
-                'message' => 'Renew hanya untuk lisensi yang sudah expired. Ganti paket lewat Edit Client (Users).',
+                'message' => 'Renew hanya untuk lisensi yang sudah expired. Ganti paket lewat tombol Ganti Paket di halaman Lisensi.',
             ], 422);
         }
 

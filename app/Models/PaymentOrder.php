@@ -14,6 +14,7 @@ class PaymentOrder extends Model
         'application_id',
         'application_package_id',
         'affiliate_id',
+        'promo_voucher_id',
         'referral_code',
         'transaction_id',
         'type',
@@ -61,6 +62,11 @@ class PaymentOrder extends Model
     public function affiliate(): BelongsTo
     {
         return $this->belongsTo(Affiliate::class);
+    }
+
+    public function promoVoucher(): BelongsTo
+    {
+        return $this->belongsTo(PromoVoucher::class);
     }
 
     public function transaction(): BelongsTo

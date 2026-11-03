@@ -7,6 +7,7 @@
         @include('admin.pages.applications')
         @include('admin.pages.licenses')
         @include('admin.pages.affiliates')
+        @include('admin.pages.promo-vouchers')
         @include('admin.pages.commissions')
         @include('admin.pages.transactions')
         @include('admin.pages.homepage')

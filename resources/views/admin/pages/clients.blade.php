@@ -2,7 +2,7 @@
       <div class="dash-header"><h1>Manajemen User</h1><p>Semua akun — client mengaktifkan affiliate sendiri dari portal client</p></div>
       <div class="dash-table-wrap">
         <div class="dash-table-header">
-          <h3 id="adminUsersCount">{{ ($users ?? collect())->count() }} user terdaftar</h3>
+          <h3 id="adminUsersCount">— user terdaftar</h3>
           <button type="button" class="btn btn-primary" style="padding:8px 16px;font-size:12px;" onclick="openAdminClientModal()">+ Tambah Client</button>
         </div>
         <table class="dash-table admin-users-table">
@@ -83,9 +83,9 @@
                 </td>
               </tr>
             @empty
-              <tr>
+              <tr class="admin-table-loading">
                 <td colspan="9" style="text-align:center; color:var(--text-3); padding:28px;">
-                  Belum ada user terdaftar.
+                  Memuat…
                 </td>
               </tr>
             @endforelse
@@ -99,7 +99,7 @@
         <div class="admin-app-modal-header">
           <div>
             <h3 id="adminClientModalTitle">Tambah Client</h3>
-            <p>Kelola data client dan aplikasi yang dibeli</p>
+            <p>Kelola data client — paket lisensi lewat menu Lisensi</p>
           </div>
           <button type="button" class="admin-app-modal-close" onclick="closeAdminClientModal()" aria-label="Tutup">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -118,10 +118,6 @@
                 <button type="button" class="admin-app-nav-item active" data-panel="general" onclick="switchAdminClientPanel('general', this)">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                   Informasi Umum
-                </button>
-                <button type="button" class="admin-app-nav-item" data-panel="applications" onclick="switchAdminClientPanel('applications', this)">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h7"/><rect x="15" y="15" width="6" height="6" rx="1"/></svg>
-                  Aplikasi & Status
                 </button>
                 <button type="button" class="admin-app-nav-item" data-panel="affiliate" onclick="switchAdminClientPanel('affiliate', this)">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -154,8 +150,8 @@
                       <p class="admin-app-label-hint" style="margin-top:4px;">Centang jika email sudah dikonfirmasi — wajib agar client bisa login.</p>
                     </div>
                     <div class="form-group">
-                      <label class="admin-app-label" for="adminClientWhatsapp">No. WhatsApp</label>
-                      <input class="admin-app-input" id="adminClientWhatsapp" type="text" placeholder="08xxxxxxxxxx" required>
+                      <label class="admin-app-label" for="adminClientWhatsapp">No. WhatsApp <span class="admin-app-label-hint">(opsional)</span></label>
+                      <input class="admin-app-input" id="adminClientWhatsapp" type="text" placeholder="08xxxxxxxxxx">
                     </div>
                   </div>
                   <div class="form-group">
@@ -183,20 +179,6 @@
                       <p class="admin-app-label-hint" style="margin:0 0 10px;">Menghapus client akan menghapus user, lisensi, dan data terkait.</p>
                       <button type="button" class="btn btn-secondary admin-client-delete-btn" onclick="deleteAdminClientFromModal()">Hapus client</button>
                     </div>
-                  </div>
-                </div>
-              </section>
-
-              <section class="admin-app-panel" data-panel="applications">
-                <div class="admin-app-panel-head">
-                  <h4>Aplikasi & Lisensi</h4>
-                  <p>Pilih aplikasi dan paket lisensi per produk</p>
-                </div>
-                <div class="admin-app-panel-body">
-                  <div class="form-group">
-                    <label class="admin-app-label">Aplikasi yang dibeli</label>
-                    <div id="adminClientApplications" class="admin-app-checklist admin-app-checklist-light">Memuat daftar aplikasi…</div>
-                    <p class="admin-app-label-hint" style="margin-top:8px;">Ganti paket di sini (tanpa pembayaran client). Masa berlaku dihitung ulang saat paket berubah. Perpanjang/revoke lisensi lewat menu Lisensi (Renew/Revoke).</p>
                   </div>
                 </div>
               </section>

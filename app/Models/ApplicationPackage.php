@@ -12,6 +12,8 @@ class ApplicationPackage extends Model
         'name',
         'is_trial',
         'devices_quota',
+        'device_slot_price',
+        'max_extra_device_slots',
         'parallel_max',
         'feature_uv',
         'duration_days',
@@ -27,6 +29,8 @@ class ApplicationPackage extends Model
         return [
             'is_trial' => 'boolean',
             'devices_quota' => 'integer',
+            'device_slot_price' => 'decimal:2',
+            'max_extra_device_slots' => 'integer',
             'parallel_max' => 'integer',
             'feature_uv' => 'boolean',
             'duration_days' => 'integer',

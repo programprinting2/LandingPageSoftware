@@ -7,7 +7,10 @@ use App\Http\Requests\UpdateAdminAffiliateRequest;
 use App\Models\Affiliate;
 use App\Models\PaymentOrder;
 use App\Models\User;
+use App\Services\ClientCommerceService;
+use App\Http\Controllers\Concerns\PaginatesAdminPaymentOrderList;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -15,6 +18,12 @@ use Illuminate\Validation\ValidationException;
 
 class AdminAffiliateController extends Controller
 {
+    use PaginatesAdminPaymentOrderList;
+
+    public function __construct(
+        private ClientCommerceService $commerceService,
+    ) {}
+
     public function index(): JsonResponse
     {
         $affiliates = Affiliate::query()
@@ -80,11 +89,15 @@ class AdminAffiliateController extends Controller
         ]);
     }
 
-    public function transactions(Affiliate $affiliate): JsonResponse
+    public function transactions(Request $request, Affiliate $affiliate): JsonResponse
     {
         $affiliate->loadMissing('user:id,name,email');
 
-        $orders = PaymentOrder::query()
+        $page = max(1, (int) $request->query('page', 1));
+        $perPage = max(1, min((int) $request->query('per_page', 20), 50));
+        $statusFilter = $this->normalizeAdminTrxStatusFilter($request->query('status'));
+
+        $listQuery = PaymentOrder::query()
             ->where('affiliate_id', $affiliate->id)
             ->with([
                 'client:id,company_name,user_id',
@@ -92,13 +105,14 @@ class AdminAffiliateController extends Controller
                 'application:id,name',
                 'package:id,name,price,affiliate_commission_fixed,affiliate_commission_percent',
                 'transaction:id,reference,status,paid_at,meta',
-            ])
+            ]);
+
+        $this->applyAdminTrxStatusFilter($listQuery, $statusFilter);
+
+        $paginator = $listQuery
             ->latest('created_at')
             ->latest('id')
-            ->get();
-
-        $transactions = $orders->map(fn (PaymentOrder $order) => $this->formatAffiliateTransaction($order));
-        $paidOrders = $orders->where('status', 'paid');
+            ->paginate($perPage, ['*'], 'page', $page);
 
         return response()->json([
             'affiliate' => [
@@ -107,17 +121,52 @@ class AdminAffiliateController extends Controller
                 'name' => $affiliate->user?->name,
                 'email' => $affiliate->user?->email,
             ],
-            'summary' => [
-                'total_count' => $orders->count(),
-                'paid_count' => $paidOrders->count(),
-                'paid_amount' => (float) $paidOrders->sum('amount'),
-                'paid_amount_label' => $this->formatCurrency((float) $paidOrders->sum('amount')),
-                'pending_count' => $orders->where('status', 'pending')->count(),
-                'commission_total' => (float) $transactions->sum('commission_amount'),
-                'commission_total_label' => $this->formatCurrency((float) $transactions->sum('commission_amount')),
-            ],
-            'transactions' => $transactions->values(),
+            'summary' => $this->affiliateOrderSummary($affiliate->id),
+            'status_filter' => $statusFilter,
+            'transactions' => $paginator->getCollection()
+                ->map(fn (PaymentOrder $order) => $this->formatAffiliateTransaction($order))
+                ->values(),
+            'pagination' => $this->paginationPayload($paginator),
         ]);
+    }
+
+    private function affiliateOrderSummary(int $affiliateId): array
+    {
+        $base = PaymentOrder::query()->where('affiliate_id', $affiliateId);
+        $paidAmount = (float) (clone $base)->where('status', 'paid')->sum('amount');
+
+        $paidOrders = (clone $base)
+            ->where('status', 'paid')
+            ->with([
+                'package:id,name,price,affiliate_commission_fixed,affiliate_commission_percent',
+                'transaction:id,meta',
+            ])
+            ->get();
+
+        $commissionTotal = (float) $paidOrders->sum(
+            fn (PaymentOrder $order) => $this->commissionAmountForOrder($order)
+        );
+
+        return [
+            'total_count' => (clone $base)->count(),
+            'paid_count' => (clone $base)->where('status', 'paid')->count(),
+            'paid_amount' => $paidAmount,
+            'paid_amount_label' => $this->formatCurrency($paidAmount),
+            'pending_count' => (clone $base)->where('status', 'pending')->count(),
+            'commission_total' => $commissionTotal,
+            'commission_total_label' => $this->formatCurrency($commissionTotal),
+        ];
+    }
+
+    private function commissionAmountForOrder(PaymentOrder $order): float
+    {
+        $commissionAmount = (float) data_get($order->transaction?->meta, 'commission_amount', 0);
+
+        if ($commissionAmount <= 0 && $order->package && $order->status === 'paid') {
+            $commissionAmount = $order->package->calculateAffiliateCommission((float) $order->amount);
+        }
+
+        return $commissionAmount;
     }
 
     private function resolveAffiliateCode(?string $code, string $name): string
@@ -189,11 +238,7 @@ class AdminAffiliateController extends Controller
             ? $order->paid_at
             : ($order->paid_at ? Carbon::parse($order->paid_at) : null);
 
-        $commissionAmount = (float) data_get($order->transaction?->meta, 'commission_amount', 0);
-
-        if ($commissionAmount <= 0 && $order->package && $order->status === 'paid') {
-            $commissionAmount = $order->package->calculateAffiliateCommission((float) $order->amount);
-        }
+        $commissionAmount = $this->commissionAmountForOrder($order);
 
         return [
             'id' => $order->id,
@@ -202,7 +247,7 @@ class AdminAffiliateController extends Controller
             'reference' => $order->transaction?->reference ?? $order->order_id,
             'referral_code' => $order->referral_code,
             'customer_name' => $customerName,
-            'customer_email' => $order->client?->user?->email,
+            'description' => $this->commerceService->billingOrderDescription($order),
             'application_name' => $order->application?->name,
             'package_name' => $order->package?->name,
             'type' => $order->type,

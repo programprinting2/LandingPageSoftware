@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\ApiAuthController;
 use App\Http\Controllers\Api\ApiLicenseController;
 use App\Http\Controllers\Api\ApiPaymentController;
 use App\Http\Controllers\Api\ApiReferralController;
+use App\Http\Controllers\Api\ApiReportController;
 use App\Http\Controllers\Api\KomerceWebhookController;
 use App\Http\Middleware\AuthenticateApiToken;
 use App\Http\Middleware\HandleSpotColorCors;
@@ -26,6 +27,8 @@ Route::middleware([HandleSpotColorCors::class])->group(function () {
         Route::post('/license/activate', [ApiLicenseController::class, 'activate']);
         Route::post('/license/deactivate', [ApiLicenseController::class, 'deactivate']);
         Route::post('/license/upgrade', [ApiLicenseController::class, 'upgrade']);
+        Route::post('/license/device-slots', [ApiLicenseController::class, 'checkoutDeviceSlots']);
+        Route::get('/report/archive-password', [ApiReportController::class, 'archivePassword']);
         Route::get('/payment/status/{orderId}', [ApiPaymentController::class, 'show'])->name('payment.status');
         Route::post('/payment/simulate/{orderId}', [ApiPaymentController::class, 'simulate'])->name('payment.simulate');
     });

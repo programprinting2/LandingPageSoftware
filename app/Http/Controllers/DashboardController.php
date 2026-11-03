@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\BuildsSoftsaleViewData;
 use App\Models\Affiliate;
-use App\Models\Client;
 use App\Models\User;
+use App\Services\AdminAuthService;
 use App\Services\ClientAuthService;
 use App\Services\LandingContentService;
 use App\Services\LicenseService;
@@ -18,32 +18,28 @@ class DashboardController extends Controller
 
     public function __construct(private LandingContentService $landingContent) {}
 
-    public function admin(): View
+    public function admin(AdminAuthService $adminAuth): View
     {
-        $users = User::query()
-            ->with([
-                'client.applications:id,name',
-                'affiliate:id,user_id,code',
-            ])
-            ->latest('id')
-            ->get();
-
-        $affiliates = Affiliate::query()
-            ->with(['user:id,name,email'])
-            ->latest()
-            ->get();
-
-        $landingData = $this->softsaleLandingData($this->landingContent, 'admin');
+        $landingData = $this->softsaleLandingData(
+            $this->landingContent,
+            'admin',
+            includeMarketingPayload: false,
+        );
         $landingData['adminOverview'] = [
             'clients' => User::query()->where('role', 'client')->count(),
             'affiliates_active' => Affiliate::query()->where('status', 'active')->count(),
         ];
 
+        $user = Auth::user();
+        if ($user && in_array($user->role, AdminAuthService::ADMIN_ROLES, true)) {
+            $landingData['initialAdmin'] = $adminAuth->adminPayload($user);
+        }
+
         return view('dashboard.admin', array_merge(
-            $this->softsaleSiteData($this->landingContent),
+            $this->softsaleSiteData($this->landingContent, minimal: true),
             [
-                'users' => $users,
-                'affiliates' => $affiliates,
+                'users' => collect(),
+                'affiliates' => collect(),
                 'landingData' => $landingData,
             ],
         ));
@@ -51,7 +47,11 @@ class DashboardController extends Controller
 
     public function client(ClientAuthService $clientAuth, LicenseService $licenseService): View
     {
-        $landingData = $this->softsaleLandingData($this->landingContent, 'client');
+        $landingData = $this->softsaleLandingData(
+            $this->landingContent,
+            'client',
+            includeMarketingPayload: false,
+        );
         $user = Auth::user();
 
         if ($user && $clientAuth->canAccessClientPortal($user)) {
@@ -60,7 +60,7 @@ class DashboardController extends Controller
         }
 
         return view('dashboard.client', array_merge(
-            $this->softsaleSiteData($this->landingContent),
+            $this->softsaleSiteData($this->landingContent, minimal: true),
             [
                 'landingData' => $landingData,
             ],

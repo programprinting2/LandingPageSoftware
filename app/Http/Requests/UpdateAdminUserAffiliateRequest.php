@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\ValidAffiliateReferralCode;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,7 +25,7 @@ class UpdateAdminUserAffiliateRequest extends FormRequest
                 'nullable',
                 'string',
                 'max:32',
-                Rule::unique('affiliates', 'code')->ignore($user?->affiliate?->id),
+                new ValidAffiliateReferralCode($user?->affiliate?->id),
             ],
         ];
     }

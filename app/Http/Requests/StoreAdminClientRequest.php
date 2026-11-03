@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesWhatsappInput;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
 class StoreAdminClientRequest extends FormRequest
 {
+    use NormalizesWhatsappInput;
+
     public function authorize(): bool
     {
         return true;
@@ -18,7 +21,7 @@ class StoreAdminClientRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'company_name' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'whatsapp' => ['required', 'string', 'max:20', 'regex:/^08[0-9]{8,13}$/'],
+            'whatsapp' => ['nullable', 'string', 'max:20'],
             'password' => ['required', 'string', Password::min(8)],
             'status' => ['required', 'in:active,inactive'],
             'email_verified' => ['nullable', 'boolean'],
@@ -37,8 +40,6 @@ class StoreAdminClientRequest extends FormRequest
             'email.required' => 'Email wajib diisi.',
             'email.email' => 'Format email tidak valid.',
             'email.unique' => 'Email sudah terdaftar.',
-            'whatsapp.required' => 'Nomor WhatsApp wajib diisi.',
-            'whatsapp.regex' => 'Nomor WhatsApp harus dimulai 08 dan 10-15 digit.',
             'password.required' => 'Password wajib diisi.',
             'status.required' => 'Status wajib dipilih.',
             'applications.*.application_id.required' => 'Aplikasi wajib dipilih.',

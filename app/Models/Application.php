@@ -16,6 +16,9 @@ class Application extends Model
         'default_devices_max',
         'is_active',
         'sort_order',
+        'notification_enabled',
+        'notification_image_url',
+        'notification_package_ids',
     ];
 
     protected function casts(): array
@@ -24,6 +27,8 @@ class Application extends Model
             'default_devices_max' => 'integer',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
+            'notification_enabled' => 'boolean',
+            'notification_package_ids' => 'array',
         ];
     }
 

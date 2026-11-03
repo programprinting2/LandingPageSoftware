@@ -5,10 +5,16 @@ namespace App\Services;
 use App\Models\Affiliate;
 use App\Models\PaymentOrder;
 use App\Models\User;
+use App\Support\AffiliateReferralCode;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class AffiliateService
 {
+    public function __construct(
+        private ClientCommerceService $commerceService,
+    ) {}
+
     public function isAffiliatePortalActive(User $user): bool
     {
         $user->loadMissing('affiliate');
@@ -49,7 +55,7 @@ class AffiliateService
         ];
     }
 
-    public function dashboardPayload(User $user, int $page = 1, int $perPage = 10): array
+    public function dashboardPayload(User $user, int $page = 1, int $perPage = 20): array
     {
         $user->loadMissing('affiliate');
 
@@ -75,6 +81,7 @@ class AffiliateService
 
         $paginator = PaymentOrder::query()
             ->where('affiliate_id', $affiliate->id)
+            ->where('status', 'paid')
             ->with([
                 'client:id,company_name,user_id',
                 'client.user:id,name,email',
@@ -82,7 +89,7 @@ class AffiliateService
                 'package:id,name',
                 'transaction:id,reference,status,paid_at,meta',
             ])
-            ->latest('created_at')
+            ->latest('paid_at')
             ->latest('id')
             ->paginate($perPage, ['*'], 'page', $page);
 
@@ -135,13 +142,40 @@ class AffiliateService
 
     public function resolveAffiliateCode(?string $code, string $name): string
     {
-        $normalized = Str::upper(trim((string) $code));
+        $result = AffiliateReferralCode::validate($code);
 
-        if ($normalized !== '' && ! Affiliate::query()->where('code', $normalized)->exists()) {
-            return $normalized;
+        if ($result['ok']) {
+            return $result['code'];
         }
 
         return $this->generateAffiliateCode($name);
+    }
+
+    public function updateClientAffiliateCode(User $user, string $code): Affiliate
+    {
+        $user->loadMissing('affiliate');
+
+        $affiliate = $user->affiliate;
+
+        if (! $affiliate || (string) $affiliate->status !== 'active') {
+            throw ValidationException::withMessages([
+                'code' => 'Program affiliate belum aktif.',
+            ]);
+        }
+
+        $result = AffiliateReferralCode::validate($code, $affiliate->id);
+
+        if (! $result['ok']) {
+            throw ValidationException::withMessages([
+                'code' => $result['message'] ?? 'Kode tidak valid.',
+            ]);
+        }
+
+        if ($affiliate->code !== $result['code']) {
+            $affiliate->update(['code' => $result['code']]);
+        }
+
+        return $affiliate->fresh();
     }
 
     public function generateAffiliateCode(string $name): string
@@ -182,9 +216,7 @@ class AffiliateService
 
         return [
             'customer_name' => $customerName,
-            'customer_email' => $order->client?->user?->email ?? '—',
-            'application_name' => $order->application?->name ?? '—',
-            'package_name' => $order->package?->name ?? '—',
+            'description' => $this->commerceService->billingOrderDescription($order),
             'amount_label' => $this->formatCurrency((float) $order->amount),
             'commission_label' => $commissionAmount > 0
                 ? $this->formatCurrency($commissionAmount)

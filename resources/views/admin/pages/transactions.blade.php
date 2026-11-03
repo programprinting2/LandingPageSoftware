@@ -50,6 +50,14 @@
           <div class="dash-table-header">
             <h3 id="adminTransactionsCount">Memuat…</h3>
           </div>
+          <div class="admin-affiliate-trx-toolbar admin-trx-page-toolbar">
+            <div class="admin-affiliate-trx-filters" id="adminTransactionsLedgerFilters" role="group" aria-label="Filter status">
+              <button type="button" class="admin-affiliate-trx-filter is-active" data-status="all" onclick="setAdminTransactionsLedgerStatusFilter('all')">Semua</button>
+              <button type="button" class="admin-affiliate-trx-filter" data-status="paid" onclick="setAdminTransactionsLedgerStatusFilter('paid')">Paid</button>
+              <button type="button" class="admin-affiliate-trx-filter" data-status="expired" onclick="setAdminTransactionsLedgerStatusFilter('expired')">Expired</button>
+            </div>
+            <span id="adminTransactionsLedgerMeta" class="admin-affiliate-trx-meta"></span>
+          </div>
           <table class="dash-table">
             <thead>
               <tr>
@@ -59,7 +67,7 @@
                 <th>Deskripsi</th>
                 <th>Jumlah</th>
                 <th>Metode</th>
-                <th>Referral</th>
+                <th>Kode voucher</th>
                 <th>Tanggal</th>
                 <th>Status</th>
                 <th>Gateway</th>
@@ -69,6 +77,7 @@
               <tr><td colspan="10" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>
             </tbody>
           </table>
+          <div id="adminTransactionsLedgerPagination" class="dash-pagination admin-trx-page-pagination" hidden></div>
         </div>
       </div>
 
@@ -117,13 +126,15 @@
             <h3 id="adminPaymentOrdersCount">Memuat…</h3>
             <div class="admin-invoice-toolbar">
               <input type="search" id="adminPaymentOrdersSearch" class="admin-invoice-search" placeholder="Payment ID / Nama Customer" oninput="debounceAdminPaymentOrdersSearch()">
-              <select id="adminPaymentOrdersStatusFilter" class="admin-invoice-filter" onchange="refreshAdminPaymentOrdersTable()">
-                <option value="all">Semua Status</option>
-                <option value="pending">Pending</option>
-                <option value="paid">Paid</option>
-                <option value="expired">Expired</option>
-              </select>
             </div>
+          </div>
+          <div class="admin-affiliate-trx-toolbar admin-trx-page-toolbar">
+            <div class="admin-affiliate-trx-filters" id="adminPaymentOrdersStatusFilters" role="group" aria-label="Filter status">
+              <button type="button" class="admin-affiliate-trx-filter is-active" data-status="all" onclick="setAdminPaymentOrdersStatusFilter('all')">Semua</button>
+              <button type="button" class="admin-affiliate-trx-filter" data-status="paid" onclick="setAdminPaymentOrdersStatusFilter('paid')">Paid</button>
+              <button type="button" class="admin-affiliate-trx-filter" data-status="expired" onclick="setAdminPaymentOrdersStatusFilter('expired')">Expired</button>
+            </div>
+            <span id="adminPaymentOrdersTableMeta" class="admin-affiliate-trx-meta"></span>
           </div>
           <table class="dash-table admin-invoice-table">
             <thead>
@@ -132,7 +143,7 @@
                 <th>Customer Name</th>
                 <th>Total Amount</th>
                 <th>Status</th>
-                <th>Referral</th>
+                <th>Kode voucher</th>
                 <th>Due Date</th>
                 <th>Detail</th>
               </tr>
@@ -141,6 +152,7 @@
               <tr><td colspan="7" style="text-align:center;color:var(--text-3);padding:28px;">Memuat…</td></tr>
             </tbody>
           </table>
+          <div id="adminPaymentOrdersPagination" class="dash-pagination admin-trx-page-pagination" hidden></div>
         </div>
       </div>
     </div>

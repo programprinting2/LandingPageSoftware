@@ -2,22 +2,17 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesWhatsappInput;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
 class StoreClientRegistrationRequest extends FormRequest
 {
+    use NormalizesWhatsappInput;
+
     public function authorize(): bool
     {
         return true;
-    }
-
-    protected function prepareForValidation(): void
-    {
-        $whatsapp = $this->input('whatsapp');
-        if ($whatsapp === null || trim((string) $whatsapp) === '') {
-            $this->merge(['whatsapp' => null]);
-        }
     }
 
     public function rules(): array
@@ -26,7 +21,7 @@ class StoreClientRegistrationRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'company_name' => ['nullable', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'whatsapp' => ['nullable', 'string', 'max:20', 'regex:/^08[0-9]{8,13}$/'],
+            'whatsapp' => ['nullable', 'string', 'max:20'],
             'password' => ['required', 'string', Password::min(8)],
             'application_id' => ['nullable', 'integer', 'exists:applications,id'],
         ];
@@ -39,7 +34,6 @@ class StoreClientRegistrationRequest extends FormRequest
             'email.required' => 'Email wajib diisi.',
             'email.email' => 'Format email tidak valid.',
             'email.unique' => 'Email sudah terdaftar.',
-            'whatsapp.regex' => 'Nomor WhatsApp harus dimulai 08 dan 10-15 digit.',
             'password.required' => 'Password wajib diisi.',
             'password.min' => 'Password minimal 8 karakter.',
         ];

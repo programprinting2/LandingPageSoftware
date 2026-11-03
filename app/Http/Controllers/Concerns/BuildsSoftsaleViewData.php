@@ -7,9 +7,16 @@ use App\Services\LandingContentService;
 
 trait BuildsSoftsaleViewData
 {
-    protected function softsaleSiteData(LandingContentService $landingContent): array
+    protected function softsaleSiteData(LandingContentService $landingContent, bool $minimal = false): array
     {
         $cms = $landingContent->all();
+
+        if ($minimal) {
+            return [
+                'site' => $cms['site'],
+                'cms' => ['site' => $cms['site']],
+            ];
+        }
 
         return [
             'site' => $cms['site'],
@@ -22,10 +29,18 @@ trait BuildsSoftsaleViewData
         string $appMode,
         ?Application $application = null,
         bool $atHomeRoot = true,
+        bool $includeMarketingPayload = true,
     ): array {
-        $payload = $application
-            ? $landingContent->landingDataPayloadForApplication($application)
-            : $landingContent->landingDataPayload();
+        if ($includeMarketingPayload) {
+            $payload = $application
+                ? $landingContent->landingDataPayloadForApplication($application)
+                : $landingContent->landingDataPayload();
+        } else {
+            $cms = $landingContent->all();
+            $payload = [
+                'site' => $cms['site'],
+            ];
+        }
 
         return array_merge($payload, [
             'appMode' => $appMode,
@@ -46,6 +61,7 @@ trait BuildsSoftsaleViewData
             'clientMeUrl' => route('client.me'),
             'clientLicenseUrl' => route('client.license'),
             'clientCheckoutUrl' => route('client.checkout'),
+            'clientDeviceSlotsCheckoutUrl' => route('client.checkout.device-slots'),
             'clientCommercePlansUrl' => route('client.commerce.plans'),
             'clientTrialActivateUrl' => route('client.trial.activate'),
             'clientCheckoutStatusUrl' => url('/api/client/checkout'),
@@ -54,10 +70,12 @@ trait BuildsSoftsaleViewData
             'clientTransactionsUrl' => route('client.transactions'),
             'clientAffiliateUrl' => route('client.affiliate'),
             'clientAffiliateEnrollUrl' => route('client.affiliate.enroll'),
+            'clientAffiliateCodeUrl' => route('client.affiliate.code.update'),
             'adminUsersAffiliateUrl' => url('/api/admin/users'),
             'adminUsersDestroyUrl' => url('/api/admin/users'),
             'adminClientsUrl' => route('admin.clients.index'),
             'adminAffiliatesUrl' => route('admin.affiliates.index'),
+            'adminPromoVouchersUrl' => route('admin.promo-vouchers.index'),
             'adminCommissionsUrl' => route('admin.commissions.index'),
             'adminApplicationsUrl' => route('admin.applications.index'),
             'adminApplicationLogoUploadUrl' => route('admin.applications.upload-logo'),

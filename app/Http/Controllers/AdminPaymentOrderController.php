@@ -4,18 +4,24 @@ namespace App\Http\Controllers;
 
 use App\Models\PaymentOrder;
 use App\Services\PaymentService;
+use App\Support\PaymentOrderVoucherDisplay;
+use App\Http\Controllers\Concerns\PaginatesAdminPaymentOrderList;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class AdminPaymentOrderController extends Controller
 {
+    use PaginatesAdminPaymentOrderList;
+
     public function __construct(private PaymentService $paymentService) {}
 
     public function index(Request $request): JsonResponse
     {
         $search = trim((string) $request->query('q', ''));
-        $statusFilter = strtolower(trim((string) $request->query('status', '')));
+        $statusFilter = $this->normalizeAdminTrxStatusFilter($request->query('status'));
+        $page = max(1, (int) $request->query('page', 1));
+        $perPage = max(1, min((int) $request->query('per_page', 20), 50));
 
         $query = PaymentOrder::query()
             ->with([
@@ -25,6 +31,7 @@ class AdminPaymentOrderController extends Controller
                 'transaction:id,reference',
                 'affiliate:id,user_id,code',
                 'affiliate.user:id,name',
+                'promoVoucher:id,code,label',
             ])
             ->latest('created_at')
             ->latest('id');
@@ -39,7 +46,7 @@ class AdminPaymentOrderController extends Controller
             });
         }
 
-        if ($statusFilter !== '' && $statusFilter !== 'all') {
+        if ($statusFilter !== 'all') {
             if ($statusFilter === 'expired') {
                 $query->where(function ($builder) {
                     $builder
@@ -64,25 +71,37 @@ class AdminPaymentOrderController extends Controller
             }
         }
 
-        $orders = $query->get()->map(function (PaymentOrder $order) {
-            $synced = $this->paymentService->syncOrderFromGateway($order);
+        $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
-            return $this->formatOrder($synced, $synced->status);
-        });
+        $orders = $paginator->getCollection()->map(
+            fn (PaymentOrder $order) => $this->formatOrder($order, $this->effectiveOrderStatus($order))
+        );
 
-        $all = PaymentOrder::query()->get()->map(function (PaymentOrder $order) {
-            return $this->paymentService->syncOrderFromGateway($order)->status;
-        });
+        $summaryRows = PaymentOrder::query()->get(['id', 'status', 'expires_at']);
+        $effectiveStatuses = $summaryRows->map(fn (PaymentOrder $row) => $this->effectiveOrderStatus($row));
 
         return response()->json([
             'summary' => [
-                'total_count' => $all->count(),
-                'pending_count' => $all->filter(fn (string $status) => $status === 'pending')->count(),
-                'paid_count' => $all->filter(fn (string $status) => $status === 'paid')->count(),
-                'expired_count' => $all->filter(fn (string $status) => $status === 'expired')->count(),
+                'total_count' => $effectiveStatuses->count(),
+                'pending_count' => $effectiveStatuses->filter(fn (string $status) => $status === 'pending')->count(),
+                'paid_count' => $effectiveStatuses->filter(fn (string $status) => $status === 'paid')->count(),
+                'expired_count' => $effectiveStatuses->filter(fn (string $status) => $status === 'expired')->count(),
             ],
+            'status_filter' => $statusFilter,
             'orders' => $orders->values(),
+            'pagination' => $this->paginationPayload($paginator),
         ]);
+    }
+
+    private function effectiveOrderStatus(PaymentOrder $order): string
+    {
+        $status = (string) $order->status;
+
+        if ($status === 'pending' && $order->expires_at instanceof Carbon && $order->expires_at->isPast()) {
+            return 'expired';
+        }
+
+        return $status;
     }
 
     private function formatOrder(PaymentOrder $order, string $effectiveStatus): array
@@ -95,8 +114,9 @@ class AdminPaymentOrderController extends Controller
         $customerName = $order->client?->company_name ?: $order->client?->user?->name ?: '—';
         $gateway = $this->paymentService->snapshotGatewayMeta($order);
         $affiliateName = $order->affiliate?->user?->name ?? ($order->referral_code ? $order->affiliate?->code : null);
+        $voucher = PaymentOrderVoucherDisplay::fromOrder($order);
         $referralLabel = $order->referral_code
-            ? ($affiliateName ? "{$order->referral_code} · {$affiliateName}" : $order->referral_code)
+            ? ($voucher['voucher_source_label'] ?: $order->referral_code)
             : '—';
         $remoteStatus = strtoupper((string) data_get($order->meta, 'komerce_status_sync.status', ''));
         $hasMismatch = is_array(data_get($order->meta, 'gateway_mismatch'));
@@ -125,6 +145,9 @@ class AdminPaymentOrderController extends Controller
             'referral_code' => $order->referral_code,
             'affiliate_name' => $affiliateName,
             'referral_label' => $referralLabel,
+            'voucher_code' => $voucher['voucher_code'],
+            'voucher_kind' => $voucher['voucher_kind'],
+            'voucher_source_label' => $voucher['voucher_source_label'],
             'payment_page_url' => $order->payment_page_url,
             'has_gateway_details' => true,
             'gateway' => $this->presentGateway($gateway),

@@ -15,12 +15,17 @@ class Client extends Model
         'whatsapp',
         'status',
         'devices_max',
+        'report_archive_password',
+    ];
+
+    protected $hidden = [
+        'report_archive_password',
     ];
 
     public function applications(): BelongsToMany
     {
         return $this->belongsToMany(Application::class, 'client_applications')
-            ->withPivot(['application_package_id', 'devices_max', 'status', 'purchased_at', 'expires_at', 'trial_consumed'])
+            ->withPivot(['application_package_id', 'devices_max', 'extra_device_slots', 'status', 'purchased_at', 'expires_at', 'trial_consumed', 'report_archive_password'])
             ->withTimestamps();
     }
 

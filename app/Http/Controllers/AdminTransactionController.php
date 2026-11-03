@@ -5,30 +5,42 @@ namespace App\Http\Controllers;
 use App\Models\PaymentOrder;
 use App\Models\Transaction;
 use App\Services\PaymentService;
+use App\Support\PaymentOrderVoucherDisplay;
+use App\Http\Controllers\Concerns\PaginatesAdminPaymentOrderList;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class AdminTransactionController extends Controller
 {
+    use PaginatesAdminPaymentOrderList;
+
     public function __construct(private PaymentService $paymentService) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $now = now();
         $monthStart = $now->copy()->startOfMonth();
+        $page = max(1, (int) $request->query('page', 1));
+        $perPage = max(1, min((int) $request->query('per_page', 20), 50));
+        $statusFilter = $this->normalizeAdminTrxStatusFilter($request->query('status'));
 
-        $transactions = Transaction::query()
+        $listQuery = Transaction::query()
             ->with([
                 'client:id,company_name,user_id',
                 'client.user:id,name,email',
                 'application:id,name,slug',
                 'package:id,name',
                 'paymentOrder.affiliate.user:id,name',
-            ])
+                'paymentOrder.promoVoucher:id,code,label',
+            ]);
+
+        $this->applyAdminLedgerStatusFilter($listQuery, $statusFilter);
+
+        $paginator = $listQuery
             ->latest('paid_at')
             ->latest('id')
-            ->get()
-            ->map(fn (Transaction $transaction) => $this->formatTransaction($transaction));
+            ->paginate($perPage, ['*'], 'page', $page);
 
         $paidTransactions = Transaction::query()->where('status', 'paid');
         $monthPaid = (clone $paidTransactions)->where('paid_at', '>=', $monthStart);
@@ -40,8 +52,21 @@ class AdminTransactionController extends Controller
                 'month_count' => (int) $monthPaid->count(),
                 'month_amount' => (float) $monthPaid->sum('amount'),
             ],
-            'transactions' => $transactions,
+            'status_filter' => $statusFilter,
+            'transactions' => $paginator->getCollection()
+                ->map(fn (Transaction $transaction) => $this->formatTransaction($transaction))
+                ->values(),
+            'pagination' => $this->paginationPayload($paginator),
         ]);
+    }
+
+    private function applyAdminLedgerStatusFilter($query, string $filter): void
+    {
+        if ($filter === 'paid') {
+            $query->where('status', 'paid');
+        } elseif ($filter === 'expired') {
+            $query->whereIn('status', ['failed', 'refunded']);
+        }
     }
 
     private function formatTransaction(Transaction $transaction): array
@@ -52,6 +77,7 @@ class AdminTransactionController extends Controller
 
         $gateway = $this->resolveGatewayDetails($transaction);
         $referral = $this->resolveReferralDetails($transaction);
+        $voucher = PaymentOrderVoucherDisplay::fromOrder($transaction->paymentOrder);
 
         return [
             'id' => $transaction->id,
@@ -76,6 +102,9 @@ class AdminTransactionController extends Controller
             'referral_code' => $referral['code'],
             'affiliate_name' => $referral['name'],
             'referral_label' => $referral['label'],
+            'voucher_code' => $voucher['voucher_code'],
+            'voucher_kind' => $voucher['voucher_kind'],
+            'voucher_source_label' => $voucher['voucher_source_label'],
             'gateway' => $gateway,
             'gateway_summary' => $gateway['summary'] ?? [],
             'has_gateway_details' => (bool) ($gateway['has_details'] ?? false),
